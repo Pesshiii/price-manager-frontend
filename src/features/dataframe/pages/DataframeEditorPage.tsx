@@ -1,49 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Grid, Loader, Stack } from '@mantine/core';
+import { useEffect, useState } from 'react';
+import { Alert, Loader, Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { createPipeline, deleteSession, getPipeline, updatePipeline } from '../api';
 import {
-  createPipeline,
-  deleteSession,
-  getPipeline,
-  updatePipeline,
-} from '../api';
-import { ReaderConfig } from '../components/ReaderConfig';
-import { SourcePicker } from '../components/SourcePicker';
-import { StepList } from '../components/StepList';
-import { PreviewPanel } from '../components/PreviewPanel';
+  DataframeBuilder,
+  type UploadedFileInfo,
+} from '../components/DataframeBuilder';
 import { UndoRedoToolbar } from '../components/UndoRedoToolbar';
 import { useDataframeRegistry } from '../hooks/useDataframeRegistry';
-import { usePipelinePreview } from '../hooks/usePipelinePreview';
 import { useUndoableState } from '../hooks/useUndoableState';
 import { dataframeKeys } from '../queryKeys';
-import type {
-  DataframePayload,
-  Instructions,
-  PreviewError,
-  PreviewResult,
-  TransformSpec,
-} from '../types';
-import { emptyInstructions, isPreviewError } from '../types';
-
-interface UploadedFile {
-  name: string;
-  size: number;
-}
-
-function newStep(spec: TransformSpec) {
-  const args: Record<string, unknown> = {};
-  for (const a of spec.args) {
-    if (a.default !== null && a.default !== undefined) args[a.name] = a.default;
-  }
-  return { func: spec.name, args };
-}
-
-function detectReader(filename: string, readers: { name: string; extensions: string[] }[]) {
-  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
-  return readers.find((r) => r.extensions.includes(ext))?.name ?? '';
-}
+import type { DataframePayload, Instructions } from '../types';
+import { emptyInstructions } from '../types';
 
 export function DataframeEditorPage() {
   const params = useParams();
@@ -64,7 +34,7 @@ export function DataframeEditorPage() {
   const undoable = useUndoableState<Instructions>(emptyInstructions());
   const [savedSnapshot, setSavedSnapshot] = useState<Instructions>(emptyInstructions());
   const [sessionId, setSessionId] = useState<string | null>(searchParams.get('session'));
-  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<UploadedFileInfo | null>(null);
   const [selectedStep, setSelectedStep] = useState<number | null>(null);
 
   useEffect(() => {
@@ -79,13 +49,6 @@ export function DataframeEditorPage() {
   }, [pipelineQuery.data]);
 
   const instructions = undoable.value;
-  const upTo = selectedStep === null ? instructions.transforms.length : selectedStep + 1;
-
-  const preview = usePipelinePreview({
-    instructions,
-    sessionId,
-    upTo,
-  });
 
   // sync sessionId -> URL
   useEffect(() => {
@@ -105,51 +68,14 @@ export function DataframeEditorPage() {
   // cleanup session on unmount
   useEffect(() => {
     return () => {
-      if (sessionId) {
-        deleteSession(sessionId).catch(() => undefined);
-      }
+      if (sessionId) deleteSession(sessionId).catch(() => undefined);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSourceUploaded = useCallback(
-    (sid: string, file: UploadedFile) => {
-      setSessionId(sid);
-      setUploadedFile(file);
-      // Auto-pick reader if not set yet
-      if (!instructions.reader.func && registry.data) {
-        const auto = detectReader(file.name, registry.data.readers);
-        if (auto) {
-          undoable.set((prev) => ({
-            ...prev,
-            reader: { func: auto, args: {} },
-          }));
-        }
-      }
-    },
-    [instructions.reader.func, registry.data, undoable],
-  );
-
-  const handleSourceReset = useCallback(() => {
-    if (sessionId) {
-      deleteSession(sessionId).catch(() => undefined);
-    }
-    setSessionId(null);
-    setUploadedFile(null);
-    setSelectedStep(null);
-  }, [sessionId]);
-
-  const commitSnapshot = useCallback(() => {
-    // Replace re-pushes current value as a new snapshot so undo can step back.
-    undoable.set(instructions);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instructions, undoable]);
-
   const saveMutation = useMutation({
     mutationFn: async () => {
-      if (id == null) {
-        return createPipeline({ name, description: '', instructions });
-      }
+      if (id == null) return createPipeline({ name, description: '', instructions });
       return updatePipeline(id, { name, description: '', instructions });
     },
     onSuccess: (data) => {
@@ -179,29 +105,11 @@ export function DataframeEditorPage() {
     JSON.stringify(instructions) !== JSON.stringify(savedSnapshot) || name !== savedName;
   const canSave = name.trim().length > 0 && !!instructions.reader.func;
 
-  // Step error highlight from preview result
-  const previewResult: PreviewResult | undefined = preview.data;
-  const errorStepIndex =
-    previewResult && isPreviewError(previewResult)
-      ? indexFromError(previewResult, instructions.transforms.length)
-      : null;
-
-  const stepLabel = useMemo(() => {
-    if (selectedStep === null) {
-      const n = instructions.transforms.length;
-      if (n === 0) return 'reader';
-      return `все шаги (${n})`;
-    }
-    const step = instructions.transforms[selectedStep];
-    const spec = registry.data?.transforms.find((t) => t.name === step?.func);
-    return spec?.label ?? step?.func ?? 'reader';
-  }, [selectedStep, instructions.transforms, registry.data]);
-
   if (registry.isLoading || (id != null && pipelineQuery.isLoading)) {
     return <Loader />;
   }
 
-  if (registry.isError) {
+  if (registry.isError || !registry.data) {
     return <Alert color="red">Не удалось загрузить registry</Alert>;
   }
 
@@ -221,89 +129,19 @@ export function DataframeEditorPage() {
         canSave={canSave}
       />
 
-      <Grid>
-        <Grid.Col span={{ base: 12, md: 5 }}>
-          <Stack gap="md">
-            <SourcePicker
-              sessionId={sessionId}
-              uploadedFile={uploadedFile}
-              onUploaded={handleSourceUploaded}
-              onReset={handleSourceReset}
-            />
-            <ReaderConfig
-              readers={registry.data!.readers}
-              reader={instructions.reader}
-              selected={selectedStep === null && instructions.transforms.length === 0}
-              onSelect={() => setSelectedStep(null)}
-              onChangeFunc={(func) =>
-                undoable.set({ ...instructions, reader: { func, args: {} } })
-              }
-              onChangeArgs={(args) =>
-                undoable.replace({ ...instructions, reader: { ...instructions.reader, args } })
-              }
-              onCommit={commitSnapshot}
-            />
-            <StepList
-              steps={instructions.transforms}
-              transforms={registry.data!.transforms}
-              selectedIndex={selectedStep}
-              errorIndex={errorStepIndex}
-              instructions={instructions}
-              sessionId={sessionId}
-              onSelect={setSelectedStep}
-              onAdd={(spec) =>
-                undoable.set({
-                  ...instructions,
-                  transforms: [...instructions.transforms, newStep(spec)],
-                })
-              }
-              onRemove={(idx) => {
-                undoable.set({
-                  ...instructions,
-                  transforms: instructions.transforms.filter((_, i) => i !== idx),
-                });
-                if (selectedStep === idx) setSelectedStep(null);
-              }}
-              onReorder={(next) =>
-                undoable.set({ ...instructions, transforms: next })
-              }
-              onChangeArgs={(idx, args) =>
-                undoable.replace({
-                  ...instructions,
-                  transforms: instructions.transforms.map((s, i) =>
-                    i === idx ? { ...s, args } : s,
-                  ),
-                })
-              }
-              onCommit={commitSnapshot}
-            />
-          </Stack>
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 7 }}>
-          <PreviewPanel
-            result={preview.data}
-            isLoading={preview.isLoading}
-            isFetching={preview.isFetching}
-            isError={preview.isError}
-            errorMessage={
-              (preview.error as { response?: { status?: number } })?.response?.status === 404
-                ? 'Сессия истекла. Загрузите файл заново.'
-                : preview.error instanceof Error
-                ? preview.error.message
-                : undefined
-            }
-            hasSession={!!sessionId}
-            stepLabel={stepLabel}
-          />
-        </Grid.Col>
-      </Grid>
+      <DataframeBuilder
+        registry={registry.data}
+        instructions={instructions}
+        setInstructions={(next) => undoable.set(next)}
+        replaceInstructions={(next) => undoable.replace(next)}
+        commitInstructions={() => undoable.set(instructions)}
+        sessionId={sessionId}
+        setSessionId={setSessionId}
+        uploadedFile={uploadedFile}
+        setUploadedFile={setUploadedFile}
+        selectedStep={selectedStep}
+        setSelectedStep={setSelectedStep}
+      />
     </Stack>
   );
-}
-
-function indexFromError(result: PreviewError, totalSteps: number): number | null {
-  const idx = result.error.step_index;
-  if (idx === null || idx === undefined) return null;
-  // up_to=k means "first k steps applied", so error is at step k-1
-  return idx > 0 && idx <= totalSteps ? idx - 1 : null;
 }
