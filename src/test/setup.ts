@@ -15,12 +15,47 @@ if (typeof window !== 'undefined' && !window.matchMedia) {
   }));
 }
 
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = function () {};
+}
+
 if (typeof window !== 'undefined' && !window.ResizeObserver) {
   window.ResizeObserver = class {
     observe() {}
     unobserve() {}
     disconnect() {}
   } as unknown as typeof ResizeObserver;
+}
+
+// Node 22+ may install a broken global `localStorage` when `--localstorage-file`
+// is passed without a valid path. Replace it with a simple in-memory polyfill
+// so jsdom-based tests can persist state synchronously.
+if (typeof globalThis !== 'undefined') {
+  const memory = new Map<string, string>();
+  const store: Storage = {
+    get length() {
+      return memory.size;
+    },
+    clear: () => memory.clear(),
+    getItem: (k) => (memory.has(k) ? (memory.get(k) as string) : null),
+    key: (i) => Array.from(memory.keys())[i] ?? null,
+    removeItem: (k) => {
+      memory.delete(k);
+    },
+    setItem: (k, v) => {
+      memory.set(k, String(v));
+    },
+  };
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: store,
+  });
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: store,
+    });
+  }
 }
 
 import { server } from './msw';

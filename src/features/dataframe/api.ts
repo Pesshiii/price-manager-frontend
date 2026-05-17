@@ -57,11 +57,24 @@ export async function deleteSession(sessionId: string): Promise<void> {
   await api.delete(`${BASE}/sessions/${sessionId}/`);
 }
 
+export interface SessionMetadata {
+  session_id: string;
+  filename: string;
+  size: number;
+  uploaded_at: string;
+}
+
+export async function getSession(sessionId: string): Promise<SessionMetadata> {
+  const { data } = await api.get<SessionMetadata>(`${BASE}/sessions/${sessionId}/`);
+  return data;
+}
+
 export interface PreviewArgs {
   instructions: Instructions;
   sessionId: string;
   upTo?: number;
   rowLimit?: number;
+  offset?: number;
 }
 
 export async function previewPipeline(args: PreviewArgs): Promise<PreviewResult> {
@@ -71,6 +84,7 @@ export async function previewPipeline(args: PreviewArgs): Promise<PreviewResult>
   };
   if (args.upTo !== undefined) body.up_to = args.upTo;
   if (args.rowLimit !== undefined) body.row_limit = args.rowLimit;
+  if (args.offset !== undefined) body.offset = args.offset;
   const { data } = await api.post<PreviewResult>(`${BASE}/preview/`, body);
   return data;
 }

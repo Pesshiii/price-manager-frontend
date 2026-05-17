@@ -1,27 +1,34 @@
 import { Alert, Badge, Card, Group, Loader, Stack, Text } from '@mantine/core';
 import { IconAlertTriangle, IconUpload } from '@tabler/icons-react';
-import type { PreviewResult } from '../types';
+import type { InfiniteData } from '@tanstack/react-query';
+import type { PreviewResult, PreviewSuccess } from '../types';
 import { isPreviewError } from '../types';
 import { PreviewTable } from './PreviewTable';
 
 interface Props {
-  result: PreviewResult | undefined;
+  data: InfiniteData<PreviewResult> | undefined;
   isLoading: boolean;
   isFetching: boolean;
   isError: boolean;
   errorMessage?: string;
   hasSession: boolean;
   stepLabel: string;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  fetchNextPage?: () => void;
 }
 
 export function PreviewPanel({
-  result,
+  data,
   isLoading,
   isFetching,
   isError,
   errorMessage,
   hasSession,
   stepLabel,
+  hasNextPage = false,
+  isFetchingNextPage = false,
+  fetchNextPage,
 }: Props) {
   if (!hasSession) {
     return (
@@ -53,15 +60,24 @@ export function PreviewPanel({
     );
   }
 
-  if (!result) return null;
+  const firstPage = data?.pages[0];
+  if (!firstPage) return null;
 
-  if (isPreviewError(result)) {
+  if (isPreviewError(firstPage)) {
     return (
       <Alert color="red" icon={<IconAlertTriangle size={16} />} title="Ошибка в шаге">
-        {result.error.message}
+        {firstPage.error.message}
       </Alert>
     );
   }
+
+  const successPages = (data?.pages ?? []).filter(
+    (p): p is PreviewSuccess => !isPreviewError(p),
+  );
+  const rows = successPages.flatMap((p) => p.rows);
+  const columns = firstPage.columns;
+  const totalRows = firstPage.total_rows;
+  const loadedRows = rows.length;
 
   return (
     <Stack gap="xs">
@@ -74,18 +90,22 @@ export function PreviewPanel({
         </Group>
         <Group gap="md">
           <Text size="xs" c="dimmed">
-            Колонок: <b>{result.columns.length}</b>
+            Колонок: <b>{columns.length}</b>
           </Text>
           <Text size="xs" c="dimmed">
-            Строк: <b>{result.total_rows}</b>{' '}
-            {result.returned_rows < result.total_rows && (
-              <span>(показано {result.returned_rows})</span>
-            )}
+            Строк: <b>{totalRows}</b>{' '}
+            {loadedRows < totalRows && <span>(загружено {loadedRows})</span>}
           </Text>
-          {isFetching && <Loader size="xs" />}
+          {(isFetching || isFetchingNextPage) && <Loader size="xs" />}
         </Group>
       </Group>
-      <PreviewTable columns={result.columns} rows={result.rows} />
+      <PreviewTable
+        columns={columns}
+        rows={rows}
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
+        onEndReached={fetchNextPage}
+      />
     </Stack>
   );
 }

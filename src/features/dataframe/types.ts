@@ -69,6 +69,8 @@ export interface PreviewSuccess {
   rows: unknown[][];
   total_rows: number;
   returned_rows: number;
+  offset: number;
+  has_more: boolean;
 }
 
 export interface PreviewError {

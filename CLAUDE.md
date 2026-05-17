@@ -91,3 +91,52 @@ Vitest + jsdom + Testing Library + MSW. `src/test/setup.ts` polyfills `matchMedi
 
 - Mantine 7 sub-package styles are imported in `main.tsx` (`@mantine/core`, `@mantine/notifications`, `@mantine/dropzone`). Adding a new Mantine sub-package requires importing its CSS there too.
 - UI strings are in Russian (see route placeholders in `src/routes.tsx`).
+
+## Pending work: dataframe caching, session restore & infinite-scroll preview
+
+Three coordinated changes across `price_manager` (backend) and this repo. Backend must land first — frontend depends on new endpoint shape. Plan source: `~/.claude/plans/snuggly-sleeping-cook.md`.
+
+### Backend prerequisites (`price_manager`, do these first)
+
+1. **`dataframe/cache.py`** (new) — pickle-based Redis cache keyed by `(session_id, sha1(reader_cfg))`. TTL 1h. `set` wrapped in `try/except` (large Excel may exceed Redis maxmemory; failure must not break the request).
+2. **`dataframe/services.py`** — `apply_partial(df_obj, file, up_to=None, *, session_id=None)`. When `session_id` is passed, look up cached reader-output before parsing; on miss, parse and store. Transforms run over a `.copy()` of the cached DF in-memory each call.
+3. **`dataframe/sessions.py`** — add `session_metadata(session_id) -> {session_id, filename, size, uploaded_at}`. `delete_session()` calls `cache.invalidate_session(session_id)` (guards `AttributeError` if backend isn't `django_redis`).
+4. **`dataframe/api/views.py`** — `UploadSessionView.get(request, session_id)` returns metadata or 404. `_dataframe_to_payload(df, row_limit, offset)` slices `df.iloc[offset:offset+row_limit]` and returns `offset` + `has_more` alongside existing fields. `PreviewView.post` passes `session_id` to `apply_partial` and proxies `offset`.
+5. **`dataframe/api/serializers.py`** — add `offset = IntegerField(required=False, min_value=0, default=0)` to `PreviewRequestSerializer`.
+6. **`product/api/views.py`** — pass `session_id=data['session_id']` into `apply_pipeline` so import paths share the cache.
+7. **`dataframe/test_api.py`** — new `CacheTests` (cache hit skips reader, `delete_session` invalidates), `SessionMetadataTests` (200 + 404), `PreviewOffsetTests` (window + past-total). Run `python manage.py test dataframe product` — must stay green.
+
+### Frontend steps (this repo)
+
+Pre-req: backend deployed/running locally with the changes above; `/dataframe/sessions/<id>/` returns metadata and `/dataframe/preview/` accepts `offset`.
+
+1. **`src/features/dataframe/api.ts`** — add:
+   ```ts
+   export interface SessionMetadata { session_id: string; filename: string; size: number; uploaded_at: string }
+   export const getSession = (sid: string) =>
+     api.get<SessionMetadata>(`/dataframe/sessions/${sid}/`).then(r => r.data);
+   ```
+   Extend `previewPipeline` args with `offset?: number` and forward it in the POST body.
+2. **`src/features/dataframe/queryKeys.ts`** — add `session: (id: string) => ['dataframe', 'session', id] as const`.
+3. **`src/features/dataframe/types.ts`** — extend `PreviewResult` with `offset: number; has_more: boolean`.
+4. **`src/features/dataframe/hooks/usePipelinePreview.ts`** — rewrite to `useInfiniteQuery`:
+   - `initialPageParam: 0`
+   - `getNextPageParam: (last) => last.has_more ? last.offset + last.returned_rows : undefined`
+   - Forward `pageParam` as `offset` to `previewPipeline`.
+   Consumers now receive `data.pages` instead of a flat `PreviewResult` — update call sites.
+5. **`src/features/dataframe/components/PreviewTable.tsx`** — replace `<Table>` with `TableVirtuoso` from `react-virtuoso` (already in deps). Wire `endReached={() => hasNextPage && !isFetchingNextPage && fetchNextPage()}`. Use `fixedHeaderContent` for sticky header; render Mantine `Table.Td` in `itemContent`. Keep `renderCell` as-is.
+6. **`src/features/dataframe/components/PreviewPanel.tsx`** — flatten `data.pages.flatMap(p => p.rows)` and pass to `PreviewTable` alongside `hasNextPage`, `isFetchingNextPage`, `fetchNextPage`. Show `total_rows` (read from `data.pages[0]`) in the header.
+7. **`src/features/dataframe/pages/DataframeEditorPage.tsx`**:
+   - On mount, if `sessionId` from URL is set but `uploadedFile` is `null`, run `useQuery(dataframeKeys.session(sessionId), () => getSession(sessionId))`. On success, `setUploadedFile({name: data.filename, size: data.size})`.
+   - On 404 (`error.response?.status === 404`) — `setSessionId(null)` (URL cleanup is already wired in the existing effect).
+   - **Delete** the unmount cleanup that calls `deleteSession(sessionId)`. Reason: it races F5 and 404s the metadata fetch. Server has 24h TTL + explicit «Заменить файл» button — that's enough.
+8. **Tests** — new files under `src/features/dataframe/__tests__/`:
+   - `sessionRestore.test.tsx` — render with `?session=abc`, MSW returns metadata → assert filename rendered.
+   - `sessionRestore404.test.tsx` — MSW returns 404 → assert `?session` removed from URL and dropzone re-shown.
+   - `previewInfiniteScroll.test.tsx` — MSW handler returns two pages; programmatically trigger `endReached` (Virtuoso exposes it via test scroll); assert second batch appended.
+
+### Verification
+
+- `pnpm typecheck` clean.
+- `pnpm test` green (existing + 3 new files).
+- Manual e2e with backend running: upload XLSX → preview shows first batch → scroll triggers more POSTs with growing `offset` (check Network tab) → F5 keeps file name, preview reloads from cached reader (visible in backend logs: only one `read_excel` call across the two page loads).

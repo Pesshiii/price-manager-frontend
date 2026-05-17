@@ -3,13 +3,14 @@ import { Alert, Loader, Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { createPipeline, deleteSession, getPipeline, updatePipeline } from '../api';
+import { createPipeline, getPipeline, updatePipeline } from '../api';
 import {
   DataframeBuilder,
   type UploadedFileInfo,
 } from '../components/DataframeBuilder';
 import { UndoRedoToolbar } from '../components/UndoRedoToolbar';
 import { useDataframeRegistry } from '../hooks/useDataframeRegistry';
+import { useSessionRestore } from '../hooks/useSessionRestore';
 import { useUndoableState } from '../hooks/useUndoableState';
 import { dataframeKeys } from '../queryKeys';
 import type { DataframePayload, Instructions } from '../types';
@@ -65,13 +66,7 @@ export function DataframeEditorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
-  // cleanup session on unmount
-  useEffect(() => {
-    return () => {
-      if (sessionId) deleteSession(sessionId).catch(() => undefined);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useSessionRestore(sessionId, uploadedFile, setUploadedFile, setSessionId);
 
   const saveMutation = useMutation({
     mutationFn: async () => {

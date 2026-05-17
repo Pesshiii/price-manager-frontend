@@ -18,7 +18,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { IconUpload } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   createPipeline,
   deleteSession,
@@ -26,10 +26,7 @@ import {
   previewPipeline,
   uploadSession,
 } from '@/features/dataframe/api';
-import {
-  DataframeBuilder,
-  type UploadedFileInfo,
-} from '@/features/dataframe/components/DataframeBuilder';
+import { DataframeBuilder } from '@/features/dataframe/components/DataframeBuilder';
 import { useDataframeRegistry } from '@/features/dataframe/hooks/useDataframeRegistry';
 import { dataframeKeys } from '@/features/dataframe/queryKeys';
 import {
@@ -44,37 +41,49 @@ import { ImportPreviewResults } from '../components/import/ImportPreviewResults'
 import { useCategories } from '../hooks/useCategories';
 import { useCharacteristicTypes } from '../hooks/useCharacteristicTypes';
 import { useImportCommit, useImportPreview } from '../hooks/useImportMutations';
+import { useImportPersistence } from '../hooks/useImportPersistence';
+import { useImportSessionRestore } from '../hooks/useImportSessionRestore';
+import {
+  clearPersistedState,
+  defaultPersistedState,
+  loadPersistedState,
+  type SourceMode,
+} from '../persistence';
 import type {
   ImportCommitResult,
   ImportMapping,
   ImportPreviewResult,
 } from '../types';
 
-type SourceMode = 'saved' | 'adhoc';
-
 export function ImportPage() {
   const qc = useQueryClient();
-  const [step, setStep] = useState(0);
-  const [mode, setMode] = useState<SourceMode>('saved');
+  const initial = useMemo(() => loadPersistedState() ?? defaultPersistedState(), []);
+
+  const [step, setStep] = useState<number>(initial.step);
+  const [mode, setMode] = useState<SourceMode>(initial.mode);
 
   // Saved-mode state
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [filename, setFilename] = useState<string | null>(null);
-  const [pipelineId, setPipelineId] = useState<number | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(initial.sessionId);
+  const [filename, setFilename] = useState<string | null>(initial.filename);
+  const [pipelineId, setPipelineId] = useState<number | null>(initial.pipelineId);
   const [savedInstructions, setSavedInstructions] = useState<Instructions | null>(null);
 
   // Ad-hoc-mode state
-  const [adhocInstructions, setAdhocInstructions] = useState<Instructions>(emptyInstructions());
-  const [adhocSessionId, setAdhocSessionId] = useState<string | null>(null);
-  const [adhocUploadedFile, setAdhocUploadedFile] = useState<UploadedFileInfo | null>(null);
+  const [adhocInstructions, setAdhocInstructions] = useState<Instructions>(initial.adhocInstructions);
+  const [adhocSessionId, setAdhocSessionId] = useState<string | null>(initial.adhocSessionId);
+  const [adhocUploadedFile, setAdhocUploadedFile] = useState(initial.adhocUploadedFile);
   const [adhocSelectedStep, setAdhocSelectedStep] = useState<number | null>(null);
 
   // Shared step-2/3 state
-  const [columns, setColumns] = useState<string[]>([]);
-  const [category, setCategory] = useState<number | undefined>(undefined);
-  const [mapping, setMapping] = useState<ImportMapping>({});
-  const [previewResult, setPreviewResult] = useState<ImportPreviewResult | null>(null);
-  const [commitResult, setCommitResult] = useState<ImportCommitResult | null>(null);
+  const [columns, setColumns] = useState<string[]>(initial.columns);
+  const [category, setCategory] = useState<number | undefined>(initial.category ?? undefined);
+  const [mapping, setMapping] = useState<ImportMapping>(initial.mapping);
+  const [previewResult, setPreviewResult] = useState<ImportPreviewResult | null>(
+    initial.previewResult,
+  );
+  const [commitResult, setCommitResult] = useState<ImportCommitResult | null>(
+    initial.commitResult,
+  );
 
   const [saveModalOpened, { open: openSave, close: closeSave }] = useDisclosure(false);
   const [saveName, setSaveName] = useState('');
@@ -92,6 +101,48 @@ export function ImportPage() {
   // Resolve current session+instructions depending on mode
   const currentSessionId = mode === 'saved' ? sessionId : adhocSessionId;
   const currentInstructions = mode === 'saved' ? savedInstructions : adhocInstructions;
+
+  // Re-resolve savedInstructions when pipelines load after hydration.
+  useEffect(() => {
+    if (mode !== 'saved' || pipelineId == null || savedInstructions || !pipelines) return;
+    const found = pipelines.find((p: DataframePayload) => p.id === pipelineId);
+    if (found) setSavedInstructions(found.instructions);
+  }, [pipelines, pipelineId, mode, savedInstructions]);
+
+  const resetDownstream = useCallback(() => {
+    setStep(0);
+    setMapping({});
+    setColumns([]);
+    setPreviewResult(null);
+    setCommitResult(null);
+  }, []);
+
+  useImportSessionRestore({
+    sessionId,
+    adhocSessionId,
+    setSessionId,
+    setFilename,
+    setAdhocSessionId,
+    setAdhocUploadedFile,
+    onAnyInvalidated: resetDownstream,
+  });
+
+  useImportPersistence({
+    version: 1,
+    mode,
+    step: (step === 1 || step === 2 ? step : 0) as 0 | 1 | 2,
+    sessionId,
+    filename,
+    pipelineId,
+    adhocSessionId,
+    adhocUploadedFile,
+    adhocInstructions,
+    columns,
+    category: category ?? null,
+    mapping,
+    previewResult,
+    commitResult,
+  });
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) => uploadSession(file),
@@ -240,6 +291,10 @@ export function ImportPage() {
     setPreviewResult(null);
     setCommitResult(null);
     setStep(0);
+    setPipelineId(null);
+    setSavedInstructions(null);
+    setCategory(undefined);
+    clearPersistedState();
   };
 
   const canProceedToMapping =

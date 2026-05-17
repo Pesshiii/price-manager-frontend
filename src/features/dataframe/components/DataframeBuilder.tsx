@@ -79,12 +79,13 @@ export function DataframeBuilder({
   const preview = usePipelinePreview({ instructions, sessionId, upTo });
 
   // Surface successful previews to parent (e.g. so it can read the column list).
+  const firstPage = preview.data?.pages[0];
   useEffect(() => {
-    if (preview.data && !isPreviewError(preview.data) && onPreviewSuccess) {
-      onPreviewSuccess(preview.data);
+    if (firstPage && !isPreviewError(firstPage) && onPreviewSuccess) {
+      onPreviewSuccess(firstPage);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preview.data]);
+  }, [firstPage]);
 
   const handleSourceUploaded = useCallback(
     (sid: string, file: UploadedFileInfo) => {
@@ -108,8 +109,8 @@ export function DataframeBuilder({
   }, [sessionId, setSessionId, setUploadedFile, setSelectedStep]);
 
   const errorStepIndex =
-    preview.data && isPreviewError(preview.data)
-      ? indexFromError(preview.data, instructions.transforms.length)
+    firstPage && isPreviewError(firstPage)
+      ? indexFromError(firstPage, instructions.transforms.length)
       : null;
 
   const stepLabel = useMemo(() => {
@@ -182,7 +183,7 @@ export function DataframeBuilder({
       </Grid.Col>
       <Grid.Col span={{ base: 12, md: 7 }}>
         <PreviewPanel
-          result={preview.data}
+          data={preview.data}
           isLoading={preview.isLoading}
           isFetching={preview.isFetching}
           isError={preview.isError}
@@ -195,6 +196,9 @@ export function DataframeBuilder({
           }
           hasSession={!!sessionId}
           stepLabel={stepLabel}
+          hasNextPage={preview.hasNextPage}
+          isFetchingNextPage={preview.isFetchingNextPage}
+          fetchNextPage={preview.fetchNextPage}
         />
       </Grid.Col>
     </Grid>
