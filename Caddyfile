@@ -1,0 +1,28 @@
+{
+    # Railway сам терминирует HTTPS и отдаёт нам HTTP; ничего шифровать не надо.
+    auto_https off
+    admin off
+}
+
+:{$PORT} {
+    encode gzip zstd
+
+    # Бэкендные пути идут в Django через приватную сеть Railway.
+    @backend {
+        path /api/* /admin/* /static/* /media/*
+    }
+    handle @backend {
+        reverse_proxy {$DJANGO_UPSTREAM} {
+            header_up Host {host}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-For {remote_host}
+        }
+    }
+
+    # SPA: всё остальное — статика, неизвестные пути перехватывает index.html.
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}
