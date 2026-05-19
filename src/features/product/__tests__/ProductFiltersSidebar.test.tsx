@@ -31,31 +31,32 @@ function Host() {
 function setupServer() {
   server.use(
     http.get('/api/products/categories/', () =>
-      HttpResponse.json([{ id: 1, name: 'Cat', slug: 'cat', parent: null, level: 0 }]),
+      HttpResponse.json({
+        count: 1,
+        next: null,
+        previous: null,
+        results: [{ id: 1, name: 'Cat', slug: 'cat', parent: null, level: 0 }],
+      }),
     ),
     http.get('/api/products/brands/', () =>
-      HttpResponse.json([{ id: 1, name: 'Brand', slug: 'brand' }]),
-    ),
-    http.get('/api/products/characteristic-types/', () =>
-      HttpResponse.json([
-        {
-          id: 1,
-          name: 'color',
-          label: 'Цвет',
-          value_type: 'string',
-          options: [],
-          unit: '',
-          required: false,
-          categories: [],
-        },
-      ]),
+      HttpResponse.json({
+        count: 1,
+        next: null,
+        previous: null,
+        results: [{ id: 1, name: 'Brand', slug: 'brand' }],
+      }),
     ),
     http.get('/api/products/products/facets/', () =>
       HttpResponse.json({
-        color: [
-          { value: 'red', count: 5 },
-          { value: 'blue', count: 2 },
-        ],
+        color: {
+          label: 'Цвет',
+          unit: '',
+          value_type: 'string',
+          buckets: [
+            { value: 'red', count: 5 },
+            { value: 'blue', count: 2 },
+          ],
+        },
       }),
     ),
   );

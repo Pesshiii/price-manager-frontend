@@ -52,7 +52,10 @@ const emptyForm: FormState = {
 
 export function CharacteristicTypesPage() {
   const qc = useQueryClient();
-  const { data, isLoading } = useCharacteristicTypes();
+  // Admin page — opt out of the default page_size=200 so the whole catalog
+  // is browsable until a proper paginated table UI is added.
+  const { data: page, isLoading } = useCharacteristicTypes({ page_size: 2000 });
+  const data = page?.results ?? [];
   const { data: categories } = useCategories();
   const [opened, { open, close }] = useDisclosure(false);
   const [form, setForm] = useState<FormState>(emptyForm);

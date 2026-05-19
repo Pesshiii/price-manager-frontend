@@ -53,10 +53,12 @@ describe('product import persistence', () => {
   });
 
   it('fills missing fields with defaults', () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, sessionId: 'x' }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 2, sessionId: 'x' }));
     const loaded = loadPersistedState();
     expect(loaded?.sessionId).toBe('x');
     expect(loaded?.mode).toBe('saved');
     expect(loaded?.columns).toEqual([]);
+    expect(loaded?.previewJobId).toBeNull();
+    expect(loaded?.commitJobId).toBeNull();
   });
 });

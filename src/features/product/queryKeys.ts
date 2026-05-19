@@ -22,7 +22,12 @@ export const brandKeys = {
 
 export const charTypeKeys = {
   all: ['characteristic-types'] as const,
-  list: (params?: { category?: number }) =>
+  list: (params?: { category?: number; search?: string; page?: number; page_size?: number }) =>
     [...charTypeKeys.all, 'list', params ?? {}] as const,
   detail: (id: number) => [...charTypeKeys.all, 'detail', id] as const,
+};
+
+export const importJobKeys = {
+  all: ['import-jobs'] as const,
+  detail: (id: string | null) => [...importJobKeys.all, 'detail', id] as const,
 };

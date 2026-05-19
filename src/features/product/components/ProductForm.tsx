@@ -43,9 +43,12 @@ export function ProductForm({ initial, submitting, onSubmit, fieldErrors }: Prod
   const { data: categories } = useCategories();
   const { data: brands } = useBrands();
   const categoryId = form.values.category;
-  const { data: charTypes } = useCharacteristicTypes(
-    categoryId !== null ? { category: categoryId } : {},
+  // Per-category fetch is typically small; still ask for a generous page_size
+  // to avoid surprising clipping if a category accumulates many EAV types.
+  const { data: charTypesPage } = useCharacteristicTypes(
+    categoryId !== null ? { category: categoryId, page_size: 500 } : { page_size: 500 },
   );
+  const charTypes = charTypesPage?.results ?? [];
 
   useEffect(() => {
     if (!fieldErrors) return;

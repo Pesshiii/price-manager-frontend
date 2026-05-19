@@ -1,7 +1,6 @@
 import { Button, Divider, Select, Stack, TextInput } from '@mantine/core';
 import { useBrands } from '../hooks/useBrands';
 import { useCategories } from '../hooks/useCategories';
-import { useCharacteristicTypes } from '../hooks/useCharacteristicTypes';
 import { useProductFacets } from '../hooks/useProductFacets';
 import type { ProductFilters } from '../types';
 import { FacetGroup } from './FacetGroup';
@@ -21,9 +20,10 @@ export function ProductFiltersSidebar({
 }: ProductFiltersSidebarProps) {
   const { data: categories } = useCategories();
   const { data: brands } = useBrands();
-  const { data: charTypes } = useCharacteristicTypes(
-    filters.category !== undefined ? { category: filters.category } : {},
-  );
+  // The facets endpoint is self-describing (label/unit/value_type embedded per
+  // group), so we no longer need to fetch the full CharacteristicType list to
+  // render this sidebar — which mattered once the catalog grew past a few
+  // hundred types (frozen browser otherwise).
   const { data: facets } = useProductFacets(filters);
 
   return (
@@ -64,19 +64,16 @@ export function ProductFiltersSidebar({
         clearable
       />
       <Divider />
-      {(charTypes ?? []).map((type) => {
-        const buckets = facets?.[type.name] ?? [];
-        if (buckets.length === 0) return null;
-        return (
-          <FacetGroup
-            key={type.id}
-            type={type}
-            buckets={buckets}
-            selected={filters.chars[type.name] ?? []}
-            onToggle={(value) => toggleCharValue(type.name, value)}
-          />
-        );
-      })}
+      {Object.entries(facets ?? {}).map(([name, group]) => (
+        <FacetGroup
+          key={name}
+          label={group.label}
+          unit={group.unit}
+          buckets={group.buckets}
+          selected={filters.chars[name] ?? []}
+          onToggle={(value) => toggleCharValue(name, value)}
+        />
+      ))}
       <Button variant="subtle" onClick={resetFilters}>
         Сбросить
       </Button>

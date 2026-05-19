@@ -4,8 +4,7 @@ import type {
   Category,
   CharacteristicType,
   FacetsResponse,
-  ImportCommitResult,
-  ImportPreviewResult,
+  ImportJob,
   ImportRequestBody,
   Paginated,
   Product,
@@ -67,9 +66,15 @@ export async function deleteProduct(id: number): Promise<void> {
   await api.delete(`${BASE}/products/${id}/`);
 }
 
-export async function listCategories(): Promise<Category[]> {
-  const { data } = await api.get<Category[]>(`${BASE}/categories/`);
-  return data;
+export async function listCategories(params: { search?: string; page_size?: number } = {}): Promise<Category[]> {
+  // Backend paginates this endpoint (default page_size=500). Callers that need
+  // many more should pass an explicit page_size — most of the UI is happy with
+  // the first page, and the sidebar uses `?search=` to filter when needed.
+  const search = new URLSearchParams();
+  if (params.search) search.append('search', params.search);
+  search.append('page_size', String(params.page_size ?? 500));
+  const { data } = await api.get<Paginated<Category>>(`${BASE}/categories/`, { params: search });
+  return data.results;
 }
 
 export interface CategoryWritePayload {
@@ -94,9 +99,12 @@ export async function deleteCategory(id: number): Promise<void> {
   await api.delete(`${BASE}/categories/${id}/`);
 }
 
-export async function listBrands(): Promise<Brand[]> {
-  const { data } = await api.get<Brand[]>(`${BASE}/brands/`);
-  return data;
+export async function listBrands(params: { search?: string; page_size?: number } = {}): Promise<Brand[]> {
+  const search = new URLSearchParams();
+  if (params.search) search.append('search', params.search);
+  search.append('page_size', String(params.page_size ?? 500));
+  const { data } = await api.get<Paginated<Brand>>(`${BASE}/brands/`, { params: search });
+  return data.results;
 }
 
 export interface BrandWritePayload {
@@ -120,12 +128,35 @@ export async function deleteBrand(id: number): Promise<void> {
   await api.delete(`${BASE}/brands/${id}/`);
 }
 
+export interface ListCharTypesParams {
+  category?: number;
+  search?: string;
+  /** Bulk-fetch metadata for explicit names (e.g. labels for already-bound chars). */
+  name__in?: string[];
+  page?: number;
+  page_size?: number;
+}
+
+/**
+ * Backend paginates `/characteristic-types/` with default `page_size=200` and
+ * `max_page_size=2000`. Pass `page_size: 2000` to fetch everything in one go
+ * (admin pages only — list freezes the UI when N >> 200).
+ */
 export async function listCharacteristicTypes(
-  params: { category?: number } = {},
-): Promise<CharacteristicType[]> {
-  const { data } = await api.get<CharacteristicType[]>(`${BASE}/characteristic-types/`, {
-    params: params.category !== undefined ? { category: params.category } : undefined,
-  });
+  params: ListCharTypesParams = {},
+): Promise<Paginated<CharacteristicType>> {
+  const search = new URLSearchParams();
+  if (params.category !== undefined) search.append('category', String(params.category));
+  if (params.search) search.append('search', params.search);
+  if (params.name__in && params.name__in.length > 0) {
+    search.append('name__in', params.name__in.join(','));
+  }
+  if (params.page !== undefined) search.append('page', String(params.page));
+  if (params.page_size !== undefined) search.append('page_size', String(params.page_size));
+  const { data } = await api.get<Paginated<CharacteristicType>>(
+    `${BASE}/characteristic-types/`,
+    { params: search },
+  );
   return data;
 }
 
@@ -164,12 +195,17 @@ export async function deleteCharacteristicType(id: number): Promise<void> {
   await api.delete(`${BASE}/characteristic-types/${id}/`);
 }
 
-export async function previewImport(body: ImportRequestBody): Promise<ImportPreviewResult> {
-  const { data } = await api.post<ImportPreviewResult>(`${BASE}/import/preview/`, body);
+export async function previewImport(body: ImportRequestBody): Promise<ImportJob> {
+  const { data } = await api.post<ImportJob>(`${BASE}/import/preview/`, body);
   return data;
 }
 
-export async function commitImport(body: ImportRequestBody): Promise<ImportCommitResult> {
-  const { data } = await api.post<ImportCommitResult>(`${BASE}/import/commit/`, body);
+export async function commitImport(body: ImportRequestBody): Promise<ImportJob> {
+  const { data } = await api.post<ImportJob>(`${BASE}/import/commit/`, body);
+  return data;
+}
+
+export async function getImportJob(jobId: string): Promise<ImportJob> {
+  const { data } = await api.get<ImportJob>(`${BASE}/import/jobs/${jobId}/`);
   return data;
 }

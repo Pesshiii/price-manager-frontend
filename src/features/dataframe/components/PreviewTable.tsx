@@ -1,6 +1,8 @@
 import { forwardRef } from 'react';
-import { Table } from '@mantine/core';
+import { Menu, Table, UnstyledButton } from '@mantine/core';
+import { IconChevronDown } from '@tabler/icons-react';
 import { TableVirtuoso, type TableComponents } from 'react-virtuoso';
+import type { TransformSpec } from '../types';
 
 interface Props {
   columns: string[];
@@ -9,6 +11,10 @@ interface Props {
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   onEndReached?: () => void;
+  /** Column-aware transforms shown in the per-header dropdown. */
+  columnTransforms?: TransformSpec[];
+  /** Fires when user picks an action on a column. */
+  onColumnAction?: (column: string, transformName: string) => void;
 }
 
 function renderCell(value: unknown) {
@@ -17,6 +23,45 @@ function renderCell(value: unknown) {
   }
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
+}
+
+interface ColumnHeaderProps {
+  name: string;
+  transforms: TransformSpec[];
+  onPick: (transformName: string) => void;
+}
+
+function ColumnHeader({ name, transforms, onPick }: ColumnHeaderProps) {
+  if (transforms.length === 0) {
+    return <span>{name}</span>;
+  }
+  return (
+    <Menu shadow="md" position="bottom-start" withinPortal>
+      <Menu.Target>
+        <UnstyledButton
+          aria-label={`Действия с колонкой ${name}`}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            fontWeight: 'inherit',
+            color: 'inherit',
+          }}
+        >
+          {name}
+          <IconChevronDown size={12} />
+        </UnstyledButton>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Label>Действия с «{name}»</Menu.Label>
+        {transforms.map((t) => (
+          <Menu.Item key={t.name} onClick={() => onPick(t.name)}>
+            {t.label || t.name}
+          </Menu.Item>
+        ))}
+      </Menu.Dropdown>
+    </Menu>
+  );
 }
 
 const VirtuosoTableComponents: TableComponents<unknown[]> = {
@@ -49,7 +94,10 @@ export function PreviewTable({
   hasNextPage = false,
   isFetchingNextPage = false,
   onEndReached,
+  columnTransforms = [],
+  onColumnAction,
 }: Props) {
+  const headerTransforms = onColumnAction ? columnTransforms : [];
   return (
     <TableVirtuoso
       style={{ height: maxHeight }}
@@ -61,7 +109,13 @@ export function PreviewTable({
       fixedHeaderContent={() => (
         <tr>
           {columns.map((c) => (
-            <th key={c}>{c}</th>
+            <th key={c}>
+              <ColumnHeader
+                name={c}
+                transforms={headerTransforms}
+                onPick={(transformName) => onColumnAction?.(c, transformName)}
+              />
+            </th>
           ))}
         </tr>
       )}

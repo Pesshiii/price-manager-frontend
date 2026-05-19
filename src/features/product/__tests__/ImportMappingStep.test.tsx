@@ -42,14 +42,16 @@ describe('ImportMappingStep', () => {
     expect(onChange).toHaveBeenCalledWith({ sku: { column: 'SKU' } });
   });
 
-  it('selecting a column for characteristic stores under characteristics.<name>', async () => {
+  it('selecting a column for a bound characteristic stores under characteristics.<name>', async () => {
+    // After the EAV-import refactor only bound chars are rendered as table rows;
+    // the catalog discovery happens via the search-driven autocomplete.
     const user = userEvent.setup();
     const onChange = vi.fn<(m: ImportMapping) => void>();
     renderWithProviders(
       <ImportMappingStep
         columns={['SKU', 'Color']}
         characteristicTypes={[charType]}
-        mapping={{}}
+        mapping={{ characteristics: { color: { column: '' } } }}
         onChange={onChange}
       />,
     );
@@ -61,5 +63,66 @@ describe('ImportMappingStep', () => {
     expect(onChange).toHaveBeenCalledWith({
       characteristics: { color: { column: 'Color' } },
     });
+  });
+
+  it('clicking "Добавить вариант" appends an empty dynamic group', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn<(m: ImportMapping) => void>();
+    renderWithProviders(
+      <ImportMappingStep
+        columns={['attr_name', 'attr_value', 'attr_unit']}
+        characteristicTypes={[]}
+        mapping={{}}
+        onChange={onChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Добавить вариант/ }));
+
+    expect(onChange).toHaveBeenCalledWith({
+      dynamic_characteristics: [{ name_column: '', value_column: '' }],
+    });
+  });
+
+  it('picking a column for "Имя из колонки" emits the spec patch', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn<(m: ImportMapping) => void>();
+    renderWithProviders(
+      <ImportMappingStep
+        columns={['attr_name', 'attr_value', 'attr_unit']}
+        characteristicTypes={[]}
+        mapping={{ dynamic_characteristics: [{ name_column: '', value_column: '' }] }}
+        onChange={onChange}
+      />,
+    );
+
+    const nameSelect = screen.getByRole('textbox', { name: 'Имя из колонки (группа 1)' });
+    await user.click(nameSelect);
+    await user.click(await screen.findByRole('option', { name: 'attr_name' }));
+
+    expect(onChange).toHaveBeenCalledWith({
+      dynamic_characteristics: [{ name_column: 'attr_name', value_column: '' }],
+    });
+  });
+
+  it('removing the only dynamic group drops the key from the mapping', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn<(m: ImportMapping) => void>();
+    renderWithProviders(
+      <ImportMappingStep
+        columns={['attr_name', 'attr_value']}
+        characteristicTypes={[]}
+        mapping={{
+          dynamic_characteristics: [
+            { name_column: 'attr_name', value_column: 'attr_value' },
+          ],
+        }}
+        onChange={onChange}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Удалить группу 1' }));
+
+    expect(onChange).toHaveBeenCalledWith({});
   });
 });

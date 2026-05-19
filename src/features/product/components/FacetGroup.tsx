@@ -1,20 +1,21 @@
 import { Badge, Checkbox, Group, Stack, Text } from '@mantine/core';
-import type { CharacteristicType, FacetBucket } from '../types';
+import type { FacetBucket } from '../types';
 
 export interface FacetGroupProps {
-  type: CharacteristicType;
+  label: string;
+  unit?: string;
   buckets: FacetBucket[];
   selected: string[];
   onToggle: (value: string) => void;
 }
 
-export function FacetGroup({ type, buckets, selected, onToggle }: FacetGroupProps) {
+export function FacetGroup({ label, unit, buckets, selected, onToggle }: FacetGroupProps) {
   if (buckets.length === 0) return null;
   return (
     <Stack gap={4}>
       <Text size="sm" fw={600}>
-        {type.label}
-        {type.unit ? ` (${type.unit})` : ''}
+        {label}
+        {unit ? ` (${unit})` : ''}
       </Text>
       {buckets.map((bucket) => {
         const value = String(bucket.value);

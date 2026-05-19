@@ -39,12 +39,24 @@ export interface DataframeBuilderProps {
   onPreviewSuccess?: (preview: PreviewSuccess) => void;
 }
 
-function newStep(spec: TransformSpec) {
+function newStep(spec: TransformSpec, overrides?: Record<string, unknown>) {
   const args: Record<string, unknown> = {};
   for (const a of spec.args) {
     if (a.default !== null && a.default !== undefined) args[a.name] = a.default;
   }
+  if (overrides) Object.assign(args, overrides);
   return { func: spec.name, args };
+}
+
+function findColumnArg(spec: TransformSpec) {
+  return spec.args.find((a) => a.type === 'column' || a.type === 'columns');
+}
+
+function columnAwareTransforms(transforms: TransformSpec[]) {
+  return transforms
+    .filter((t) => findColumnArg(t) !== undefined)
+    .slice()
+    .sort((a, b) => (a.label || a.name).localeCompare(b.label || b.name));
 }
 
 function detectReader(filename: string, readers: { name: string; extensions: string[] }[]) {
@@ -112,6 +124,28 @@ export function DataframeBuilder({
     firstPage && isPreviewError(firstPage)
       ? indexFromError(firstPage, instructions.transforms.length)
       : null;
+
+  const colTransforms = useMemo(
+    () => columnAwareTransforms(registry.transforms),
+    [registry.transforms],
+  );
+
+  const handleColumnAction = useCallback(
+    (column: string, transformName: string) => {
+      const spec = registry.transforms.find((t) => t.name === transformName);
+      if (!spec) return;
+      const colArg = findColumnArg(spec);
+      if (!colArg) return;
+      const value = colArg.type === 'columns' ? [column] : column;
+      setInstructions({
+        ...instructions,
+        transforms: [...instructions.transforms, newStep(spec, { [colArg.name]: value })],
+      });
+      // Focus the freshly added step so the user can tweak remaining args.
+      setSelectedStep(instructions.transforms.length);
+    },
+    [instructions, registry.transforms, setInstructions, setSelectedStep],
+  );
 
   const stepLabel = useMemo(() => {
     if (selectedStep === null) {
@@ -199,6 +233,8 @@ export function DataframeBuilder({
           hasNextPage={preview.hasNextPage}
           isFetchingNextPage={preview.isFetchingNextPage}
           fetchNextPage={preview.fetchNextPage}
+          columnTransforms={colTransforms}
+          onColumnAction={handleColumnAction}
         />
       </Grid.Col>
     </Grid>

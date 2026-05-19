@@ -84,9 +84,27 @@ export interface FacetBucket {
   count: number;
 }
 
-export type FacetsResponse = Record<string, FacetBucket[]>;
+export interface FacetGroupData {
+  label: string;
+  unit: string;
+  value_type: ValueType;
+  buckets: FacetBucket[];
+}
+
+export type FacetsResponse = Record<string, FacetGroupData>;
 
 export type FieldMapping = { column: string } | { const: unknown };
+
+/**
+ * EAV-style "dynamic" characteristic mapping: name/value/unit each bound to
+ * a source column. Per row the worker reads those cells, slugifies the name
+ * and auto-creates the CharacteristicType. The unit_column is optional.
+ */
+export interface DynamicCharSpec {
+  name_column: string;
+  value_column: string;
+  unit_column?: string;
+}
 
 export interface ImportMapping {
   sku?: FieldMapping;
@@ -96,6 +114,7 @@ export interface ImportMapping {
   description?: FieldMapping;
   status?: FieldMapping;
   characteristics?: Record<string, FieldMapping>;
+  dynamic_characteristics?: DynamicCharSpec[];
 }
 
 /**
@@ -138,4 +157,20 @@ export interface ImportRequestBody {
   instructions: unknown;
   mapping: ImportMapping;
   row_limit?: number;
+}
+
+export type ImportJobStatus = 'pending' | 'running' | 'success' | 'error';
+
+export type ImportJobKind = 'preview' | 'commit';
+
+export interface ImportJob {
+  id: string;
+  kind: ImportJobKind;
+  status: ImportJobStatus;
+  stage: string;
+  result: ImportPreviewResult | ImportCommitResult | null;
+  error: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
 }

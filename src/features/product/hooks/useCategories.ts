@@ -5,7 +5,7 @@ import { categoryKeys } from '../queryKeys';
 export function useCategories() {
   return useQuery({
     queryKey: categoryKeys.list(),
-    queryFn: listCategories,
+    queryFn: () => listCategories(),
     staleTime: 5 * 60_000,
   });
 }

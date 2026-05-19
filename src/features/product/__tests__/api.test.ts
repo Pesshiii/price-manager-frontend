@@ -101,21 +101,34 @@ describe('product api', () => {
     });
   });
 
-  it('commitImport hits /import/commit/', async () => {
+  it('commitImport hits /import/commit/ and returns an ImportJob envelope', async () => {
     let called = false;
     server.use(
       http.post('/api/products/import/commit/', () => {
         called = true;
-        return HttpResponse.json({ created: 3, updated: 1, skipped: 0, errors: [] });
+        return HttpResponse.json(
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            kind: 'commit',
+            status: 'pending',
+            result: null,
+            error: '',
+            created_at: '2026-01-01T00:00:00Z',
+            started_at: null,
+            finished_at: null,
+          },
+          { status: 202 },
+        );
       }),
     );
-    const result = await commitImport({
+    const job = await commitImport({
       session_id: 'sid',
       instructions: {},
       mapping: {},
     });
     expect(called).toBe(true);
-    expect(result.created).toBe(3);
-    expect(result.updated).toBe(1);
+    expect(job.id).toBe('11111111-1111-1111-1111-111111111111');
+    expect(job.kind).toBe('commit');
+    expect(job.status).toBe('pending');
   });
 });

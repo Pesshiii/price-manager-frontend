@@ -5,7 +5,7 @@ import type { ImportCommitResult, ImportMapping, ImportPreviewResult } from './t
 export type SourceMode = 'saved' | 'adhoc';
 
 export interface ImportPersistedState {
-  version: 1;
+  version: 2;
   mode: SourceMode;
   step: 0 | 1 | 2;
   sessionId: string | null;
@@ -15,17 +15,18 @@ export interface ImportPersistedState {
   adhocUploadedFile: UploadedFileInfo | null;
   adhocInstructions: Instructions;
   columns: string[];
-  category: number | null;
   mapping: ImportMapping;
+  previewJobId: string | null;
+  commitJobId: string | null;
   previewResult: ImportPreviewResult | null;
   commitResult: ImportCommitResult | null;
 }
 
-export const STORAGE_KEY = 'product-import-state-v1';
+export const STORAGE_KEY = 'product-import-state-v2';
 
 export function defaultPersistedState(): ImportPersistedState {
   return {
-    version: 1,
+    version: 2,
     mode: 'saved',
     step: 0,
     sessionId: null,
@@ -35,8 +36,9 @@ export function defaultPersistedState(): ImportPersistedState {
     adhocUploadedFile: null,
     adhocInstructions: emptyInstructions(),
     columns: [],
-    category: null,
     mapping: {},
+    previewJobId: null,
+    commitJobId: null,
     previewResult: null,
     commitResult: null,
   };
@@ -47,7 +49,7 @@ export function loadPersistedState(): ImportPersistedState | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<ImportPersistedState>;
-    if (parsed?.version !== 1) {
+    if (parsed?.version !== 2) {
       localStorage.removeItem(STORAGE_KEY);
       return null;
     }

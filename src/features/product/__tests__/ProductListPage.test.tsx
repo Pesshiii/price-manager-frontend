@@ -27,9 +27,15 @@ describe('ProductListPage', () => {
         HttpResponse.json({ count: 1, next: null, previous: null, results: [PRODUCT] }),
       ),
       http.get('/api/products/products/facets/', () => HttpResponse.json({})),
-      http.get('/api/products/categories/', () => HttpResponse.json([])),
-      http.get('/api/products/brands/', () => HttpResponse.json([])),
-      http.get('/api/products/characteristic-types/', () => HttpResponse.json([])),
+      http.get('/api/products/categories/', () =>
+        HttpResponse.json({ count: 0, next: null, previous: null, results: [] }),
+      ),
+      http.get('/api/products/brands/', () =>
+        HttpResponse.json({ count: 0, next: null, previous: null, results: [] }),
+      ),
+      http.get('/api/products/characteristic-types/', () =>
+        HttpResponse.json({ count: 0, next: null, previous: null, results: [] }),
+      ),
     );
 
     renderWithProviders(
@@ -51,9 +57,15 @@ describe('ProductListPage', () => {
         HttpResponse.json({ count: 0, next: null, previous: null, results: [] }),
       ),
       http.get('/api/products/products/facets/', () => HttpResponse.json({})),
-      http.get('/api/products/categories/', () => HttpResponse.json([])),
-      http.get('/api/products/brands/', () => HttpResponse.json([])),
-      http.get('/api/products/characteristic-types/', () => HttpResponse.json([])),
+      http.get('/api/products/categories/', () =>
+        HttpResponse.json({ count: 0, next: null, previous: null, results: [] }),
+      ),
+      http.get('/api/products/brands/', () =>
+        HttpResponse.json({ count: 0, next: null, previous: null, results: [] }),
+      ),
+      http.get('/api/products/characteristic-types/', () =>
+        HttpResponse.json({ count: 0, next: null, previous: null, results: [] }),
+      ),
     );
 
     renderWithProviders(

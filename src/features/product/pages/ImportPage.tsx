@@ -18,7 +18,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { IconUpload } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createPipeline,
   deleteSession,
@@ -38,9 +38,13 @@ import {
 } from '@/features/dataframe/types';
 import { ImportMappingStep } from '../components/import/ImportMappingStep';
 import { ImportPreviewResults } from '../components/import/ImportPreviewResults';
-import { useCategories } from '../hooks/useCategories';
 import { useCharacteristicTypes } from '../hooks/useCharacteristicTypes';
-import { useImportCommit, useImportPreview } from '../hooks/useImportMutations';
+import {
+  useImportCommit,
+  useImportJob,
+  useImportJobInvalidation,
+  useImportPreview,
+} from '../hooks/useImportMutations';
 import { useImportPersistence } from '../hooks/useImportPersistence';
 import { useImportSessionRestore } from '../hooks/useImportSessionRestore';
 import {
@@ -51,6 +55,7 @@ import {
 } from '../persistence';
 import type {
   ImportCommitResult,
+  ImportJob,
   ImportMapping,
   ImportPreviewResult,
 } from '../types';
@@ -76,8 +81,9 @@ export function ImportPage() {
 
   // Shared step-2/3 state
   const [columns, setColumns] = useState<string[]>(initial.columns);
-  const [category, setCategory] = useState<number | undefined>(initial.category ?? undefined);
   const [mapping, setMapping] = useState<ImportMapping>(initial.mapping);
+  const [previewJobId, setPreviewJobId] = useState<string | null>(initial.previewJobId);
+  const [commitJobId, setCommitJobId] = useState<string | null>(initial.commitJobId);
   const [previewResult, setPreviewResult] = useState<ImportPreviewResult | null>(
     initial.previewResult,
   );
@@ -88,15 +94,33 @@ export function ImportPage() {
   const [saveModalOpened, { open: openSave, close: closeSave }] = useDisclosure(false);
   const [saveName, setSaveName] = useState('');
 
+  // Each ref stores `${jobId}:${terminalStatus}` once we've handled it, so
+  // re-renders / re-fetches with identical data don't re-fire the toast.
+  const handledPreviewRef = useRef<string | null>(null);
+  const handledCommitRef = useRef<string | null>(null);
+
   const registry = useDataframeRegistry();
   const { data: pipelines } = useQuery({
     queryKey: dataframeKeys.pipelines(),
     queryFn: listPipelines,
   });
-  const { data: categories } = useCategories();
-  const { data: charTypes } = useCharacteristicTypes(
-    category !== undefined ? { category } : {},
+  // Bound-chars metadata only. After EAV-import the catalog can hold thousands
+  // of types — never load the whole list here, that froze the browser. The
+  // ImportMappingStep ships its own ?search=-driven autocomplete picker for
+  // discovering new types; here we just pre-fetch labels/units for the chars
+  // already bound in the current mapping (typically a handful).
+  const boundCharNames = useMemo(
+    () => Object.keys(mapping.characteristics ?? {}),
+    [mapping],
   );
+  const { data: boundCharTypesPage } = useCharacteristicTypes(
+    boundCharNames.length > 0
+      ? { name__in: boundCharNames, page_size: 500 }
+      : {},
+  );
+  const charTypes = boundCharNames.length > 0
+    ? boundCharTypesPage?.results ?? []
+    : [];
 
   // Resolve current session+instructions depending on mode
   const currentSessionId = mode === 'saved' ? sessionId : adhocSessionId;
@@ -113,8 +137,12 @@ export function ImportPage() {
     setStep(0);
     setMapping({});
     setColumns([]);
+    setPreviewJobId(null);
+    setCommitJobId(null);
     setPreviewResult(null);
     setCommitResult(null);
+    handledPreviewRef.current = null;
+    handledCommitRef.current = null;
   }, []);
 
   useImportSessionRestore({
@@ -128,7 +156,7 @@ export function ImportPage() {
   });
 
   useImportPersistence({
-    version: 1,
+    version: 2,
     mode,
     step: (step === 1 || step === 2 ? step : 0) as 0 | 1 | 2,
     sessionId,
@@ -138,8 +166,9 @@ export function ImportPage() {
     adhocUploadedFile,
     adhocInstructions,
     columns,
-    category: category ?? null,
     mapping,
+    previewJobId,
+    commitJobId,
     previewResult,
     commitResult,
   });
@@ -173,6 +202,52 @@ export function ImportPage() {
 
   const previewMutation = useImportPreview();
   const commitMutation = useImportCommit();
+  const invalidateAfterCommit = useImportJobInvalidation();
+
+  const previewJobQuery = useImportJob(previewJobId);
+  const commitJobQuery = useImportJob(commitJobId);
+
+  // Persist preview job result once it lands — exactly once per (jobId, status).
+  useEffect(() => {
+    const job = previewJobQuery.data;
+    if (!job) return;
+    if (job.status !== 'success' && job.status !== 'error') return;
+    const key = `${job.id}:${job.status}`;
+    if (handledPreviewRef.current === key) return;
+    handledPreviewRef.current = key;
+    if (job.status === 'success' && job.result) {
+      setPreviewResult(job.result as ImportPreviewResult);
+    } else if (job.status === 'error') {
+      notifications.show({
+        message: job.error || 'Ошибка при подготовке превью',
+        color: 'red',
+      });
+    }
+  }, [previewJobQuery.data]);
+
+  // Persist commit job result once it lands — exactly once per (jobId, status).
+  useEffect(() => {
+    const job = commitJobQuery.data;
+    if (!job) return;
+    if (job.status !== 'success' && job.status !== 'error') return;
+    const key = `${job.id}:${job.status}`;
+    if (handledCommitRef.current === key) return;
+    handledCommitRef.current = key;
+    if (job.status === 'success' && job.result) {
+      const result = job.result as ImportCommitResult;
+      setCommitResult(result);
+      invalidateAfterCommit(job as ImportJob);
+      notifications.show({
+        message: `Создано: ${result.created}, обновлено: ${result.updated}`,
+        color: 'green',
+      });
+    } else if (job.status === 'error') {
+      notifications.show({
+        message: job.error || 'Ошибка при импорте',
+        color: 'red',
+      });
+    }
+  }, [commitJobQuery.data, invalidateAfterCommit]);
 
   const savePipelineMutation = useMutation({
     mutationFn: () =>
@@ -242,6 +317,7 @@ export function ImportPage() {
 
   const runImportPreview = () => {
     if (!currentSessionId || !currentInstructions) return;
+    setPreviewResult(null);
     previewMutation.mutate(
       {
         session_id: currentSessionId,
@@ -250,8 +326,8 @@ export function ImportPage() {
         row_limit: 100,
       },
       {
-        onSuccess: (result) => {
-          setPreviewResult(result);
+        onSuccess: (job) => {
+          setPreviewJobId(job.id);
           setStep(2);
         },
       },
@@ -260,16 +336,11 @@ export function ImportPage() {
 
   const runImportCommit = () => {
     if (!currentSessionId || !currentInstructions) return;
+    setCommitResult(null);
     commitMutation.mutate(
       { session_id: currentSessionId, instructions: currentInstructions, mapping },
       {
-        onSuccess: (result) => {
-          setCommitResult(result);
-          notifications.show({
-            message: `Создано: ${result.created}, обновлено: ${result.updated}`,
-            color: 'green',
-          });
-        },
+        onSuccess: (job) => setCommitJobId(job.id),
       },
     );
   };
@@ -288,12 +359,15 @@ export function ImportPage() {
     setAdhocInstructions(emptyInstructions());
     setColumns([]);
     setMapping({});
+    setPreviewJobId(null);
+    setCommitJobId(null);
     setPreviewResult(null);
     setCommitResult(null);
+    handledPreviewRef.current = null;
+    handledCommitRef.current = null;
     setStep(0);
     setPipelineId(null);
     setSavedInstructions(null);
-    setCategory(undefined);
     clearPersistedState();
   };
 
@@ -301,6 +375,22 @@ export function ImportPage() {
     mode === 'saved'
       ? !!sessionId && !!savedInstructions
       : !!adhocSessionId && columns.length > 0;
+
+  const previewJobStatus = previewJobQuery.data?.status;
+  const commitJobStatus = commitJobQuery.data?.status;
+  // Dynamic groups must have both name_column and value_column or be empty —
+  // a half-filled group means the user forgot to pick a column.
+  const dynamicGroupsValid = (mapping.dynamic_characteristics ?? []).every(
+    (spec) => Boolean(spec.name_column) === Boolean(spec.value_column),
+  );
+  const previewInFlight =
+    previewMutation.isPending ||
+    previewJobStatus === 'pending' ||
+    previewJobStatus === 'running';
+  const commitInFlight =
+    commitMutation.isPending ||
+    commitJobStatus === 'pending' ||
+    commitJobStatus === 'running';
 
   return (
     <Stack>
@@ -395,22 +485,6 @@ export function ImportPage() {
               </Card>
             )}
 
-            <Card withBorder padding="md">
-              <Select
-                label="Категория для импорта"
-                placeholder="Опционально"
-                data={(categories ?? []).map((c) => ({
-                  value: String(c.id),
-                  label: '— '.repeat(c.level) + c.name,
-                }))}
-                value={category !== undefined ? String(category) : null}
-                onChange={(v) => setCategory(v ? Number(v) : undefined)}
-                description="Подгрузит характеристики выбранной категории для маппинга"
-                clearable
-                searchable
-              />
-            </Card>
-
             <Group justify="flex-end">
               <Button
                 onClick={goToMapping}
@@ -425,21 +499,21 @@ export function ImportPage() {
 
         <Stepper.Step label="Маппинг" description="Поля → колонки">
           <Stack mt="md">
-            {!charTypes && category !== undefined ? (
-              <Loader />
-            ) : (
-              <ImportMappingStep
-                columns={columns}
-                characteristicTypes={charTypes ?? []}
-                mapping={mapping}
-                onChange={setMapping}
-              />
-            )}
+            <ImportMappingStep
+              columns={columns}
+              characteristicTypes={charTypes ?? []}
+              mapping={mapping}
+              onChange={setMapping}
+            />
             <Group justify="space-between">
               <Button variant="default" onClick={() => setStep(0)}>
                 Назад
               </Button>
-              <Button onClick={runImportPreview} loading={previewMutation.isPending}>
+              <Button
+                onClick={runImportPreview}
+                loading={previewInFlight}
+                disabled={!dynamicGroupsValid}
+              >
                 Проверить
               </Button>
             </Group>
@@ -448,7 +522,21 @@ export function ImportPage() {
 
         <Stepper.Step label="Импорт" description="Проверка и сохранение">
           <Stack mt="md">
+            {previewInFlight && !previewResult && (
+              <Group>
+                <Loader size="sm" />
+                <Text c="dimmed">{previewJobQuery.data?.stage || 'Готовится превью…'}</Text>
+              </Group>
+            )}
             {previewResult && <ImportPreviewResults result={previewResult} />}
+            {commitInFlight && (
+              <Group>
+                <Loader size="sm" />
+                <Text c="dimmed">
+                  {commitJobQuery.data?.stage || 'Импортируем — можно подождать или вернуться позже'}
+                </Text>
+              </Group>
+            )}
             {commitResult && (
               <Alert color="green" title="Импорт выполнен">
                 Создано: {commitResult.created}, обновлено: {commitResult.updated},
@@ -465,7 +553,7 @@ export function ImportPage() {
                 </Button>
                 <Button
                   onClick={runImportCommit}
-                  loading={commitMutation.isPending}
+                  loading={commitInFlight}
                   disabled={!previewResult || previewResult.valid === 0}
                 >
                   Импортировать

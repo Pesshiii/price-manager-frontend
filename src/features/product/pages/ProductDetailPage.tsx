@@ -32,11 +32,13 @@ export function ProductDetailPage() {
 
   const { data: categories } = useCategories();
   const { data: brands } = useBrands();
-  const { data: charTypes } = useCharacteristicTypes(
-    product?.category !== null && product?.category !== undefined
-      ? { category: product.category }
-      : {},
+  // Only fetch types that this product actually has values for — bounded by
+  // the product's `characteristics` keys (a handful, not the whole catalog).
+  const boundNames = product ? Object.keys(product.characteristics ?? {}) : [];
+  const { data: charTypesPage } = useCharacteristicTypes(
+    boundNames.length > 0 ? { name__in: boundNames, page_size: 500 } : {},
   );
+  const charTypes = boundNames.length > 0 ? charTypesPage?.results ?? [] : [];
 
   const deleteMutation = useMutation({
     mutationFn: deleteProduct,

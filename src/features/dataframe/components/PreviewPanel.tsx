@@ -1,7 +1,7 @@
 import { Alert, Badge, Card, Group, Loader, Stack, Text } from '@mantine/core';
 import { IconAlertTriangle, IconUpload } from '@tabler/icons-react';
 import type { InfiniteData } from '@tanstack/react-query';
-import type { PreviewResult, PreviewSuccess } from '../types';
+import type { PreviewResult, PreviewSuccess, TransformSpec } from '../types';
 import { isPreviewError } from '../types';
 import { PreviewTable } from './PreviewTable';
 
@@ -16,6 +16,8 @@ interface Props {
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   fetchNextPage?: () => void;
+  columnTransforms?: TransformSpec[];
+  onColumnAction?: (column: string, transformName: string) => void;
 }
 
 export function PreviewPanel({
@@ -29,6 +31,8 @@ export function PreviewPanel({
   hasNextPage = false,
   isFetchingNextPage = false,
   fetchNextPage,
+  columnTransforms,
+  onColumnAction,
 }: Props) {
   if (!hasSession) {
     return (
@@ -105,6 +109,8 @@ export function PreviewPanel({
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
         onEndReached={fetchNextPage}
+        columnTransforms={columnTransforms}
+        onColumnAction={onColumnAction}
       />
     </Stack>
   );

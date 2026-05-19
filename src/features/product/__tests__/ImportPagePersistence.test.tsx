@@ -28,8 +28,12 @@ function baseHandlers() {
         transforms: [],
       }),
     ),
-    http.get('/api/products/categories/', () => HttpResponse.json([])),
-    http.get('/api/products/characteristic-types/', () => HttpResponse.json([])),
+    http.get('/api/products/categories/', () =>
+      HttpResponse.json({ count: 0, next: null, previous: null, results: [] }),
+    ),
+    http.get('/api/products/characteristic-types/', () =>
+      HttpResponse.json({ count: 0, next: null, previous: null, results: [] }),
+    ),
   );
 }
 
