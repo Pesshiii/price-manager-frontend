@@ -14,7 +14,12 @@
     handle @backend {
         reverse_proxy {$DJANGO_UPSTREAM} {
             header_up Host {host}
-            header_up X-Forwarded-Proto {scheme}
+            # Railway терминирует HTTPS на своём edge и пересылает нам по HTTP
+            # внутри приватной сети, поэтому {scheme} здесь == "http".
+            # Django с SECURE_SSL_REDIRECT=True увидел бы http и сделал 301 →
+            # POST превращается в GET → 405 на /api/auth/login/.
+            # Внешний трафик к Railway всегда HTTPS, поэтому захардкодим.
+            header_up X-Forwarded-Proto https
             header_up X-Forwarded-For {remote_host}
         }
     }
