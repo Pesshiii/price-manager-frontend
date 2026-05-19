@@ -7,6 +7,12 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY . .
+# Vite запекает VITE_*-переменные в бандл во время билда. В нашей
+# Railway-схеме Caddy проксирует /api/* → Django, поэтому axios должен
+# обращаться по абсолютному пути /api/...; без этого запросы вида
+# POST /auth/login/ улетают мимо @backend-матчера в file_server и
+# возвращают 405 Allow: GET, HEAD.
+ENV VITE_API_BASE_URL=/api
 RUN pnpm build
 
 # ---------- 2) serve ----------
