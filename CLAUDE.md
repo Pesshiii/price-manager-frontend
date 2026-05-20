@@ -46,8 +46,13 @@ Backend mounts the product app at `/api/products/` (DRF; session auth, same as t
 | GET / PATCH / DELETE | `/products/categories/<id>/` | CRUD detail. |
 | GET / POST | `/products/brands/` | List / create Brand. `slug` read-only. |
 | GET / PATCH / DELETE | `/products/brands/<id>/` | CRUD detail. |
-| GET / POST | `/products/characteristic-types/` | List / create CharacteristicType. Query `?category=<id>` filter is still supported but **not** used by the import wizard — the mapping step lists characteristics globally. Fields: `name`, `label`, `value_type` (`string`/`integer`/`float`/`boolean`/`choice`), `options[]`, `unit`, `required`, `categories[]`. |
-| GET / PATCH / DELETE | `/products/characteristic-types/<id>/` | CRUD detail. |
+| GET / POST | `/products/characteristic-types/` | List / create CharacteristicType. Filters: `?search=` (icontains over `name`+`label`), `?category=<id>` (repeat for multi: `?category=1&category=2` → OR), `?value_type=string\|integer\|float\|boolean\|choice`, `?required=true\|false`. Fields: `name`, `label`, `value_type` (`string`/`integer`/`float`/`boolean`/`choice`), `options[]`, `unit`, `required`, `categories[]`. Read-only `categories_detail: [{id, name, level}]` is included in every response — use it directly in the detail modal instead of fetching `/categories/`. |
+| GET / PATCH / DELETE | `/products/characteristic-types/<id>/` | CRUD detail. **PATCH rejects changes to `name` and `value_type` with HTTP 400** — both require a JSONB migration and must go through the dedicated async endpoints below. The body of the 400 names the field and the endpoint to use. |
+| POST | `/products/characteristic-types/<id>/retype/preview/` | **Synchronous.** Body: `{new_value_type}`. Response: `{total_with_key, invalid_count, unique_invalid: [{value, count}], truncated}` — products whose stored value won't coerce to the new type, grouped by raw repr (capped at 200 unique values). |
+| POST | `/products/characteristic-types/<id>/retype/commit/` | **Async.** Body: `{new_value_type, fallback: 'drop'\|'null'\|'default', default_value?, value_map?: {raw_repr: replacement}}`. Returns 202 + a `CharMutationJob` envelope. `value_map` is keyed by the **same string** the preview endpoint returned (`String(value)` for everything; `'true'`/`'false'` for booleans). Per-row precedence: `value_map[raw]` → `fallback`. |
+| POST | `/products/characteristic-types/<id>/rename/preview/` | **Synchronous.** Body: `{new_name}`. Response: `{total_to_rename, collision_count, collisions: [{product_id, sku}]}` (collisions capped at 100). |
+| POST | `/products/characteristic-types/<id>/rename/commit/` | **Async.** Body: `{new_name, on_conflict: 'overwrite'\|'keep_existing'\|'skip_row'}`. Returns 202 + a `CharMutationJob`. Same name uniqueness check as preview — duplicate target name 400s before the job is created. |
+| GET | `/products/characteristic-types/jobs/<uuid>/` | Poll a retype/rename job. Envelope: `{id, kind: 'retype'\|'rename', status, stage, char_type, payload, result, error, created_at, started_at, finished_at}`. `stage` is a short Russian sentence (`'Сканируем товары'` → `'Применяем изменения'` → `'Обновляем тип'`); empty after terminal status. `result` on success: retype → `{updated, mapped, defaulted, nulled, dropped}`; rename → `{renamed, collisions, skipped}`. Scoped to the requesting user. |
 | GET | `/products/products/` | Paginated list (`{count, next, previous, results}`, `page_size=50`, override via `?page_size=`). Filters: `?q=`, `?category=<id>` (includes MPTT descendants), `?brand=<id>`, `?status=`, `?char__<name>=<value>` (repeat for multi-value OR). |
 | POST | `/products/products/` | Create. Body: `{sku, name, category?, brand?, description?, status?, characteristics: {<type_name>: <value>}, image_urls: []}`. Backend validates/coerces JSON via CharacteristicType; 400 returns `{characteristics: ["<key>: <message>"]}`. |
 | GET / PATCH / PUT / DELETE | `/products/products/<id>/` | CRUD detail. |
@@ -55,6 +60,36 @@ Backend mounts the product app at `/api/products/` (DRF; session auth, same as t
 | POST | `/products/import/preview/` | **Async.** Dispatches a Celery job. Body: `{session_id, instructions, mapping, row_limit?}`. Returns `202` with an `ImportJob` envelope (`{id, kind: 'preview', status, stage, result, error, ...}`). When `status === 'success'`, `result` matches the legacy shape: `{rows, total, returned, valid, invalid}`. |
 | POST | `/products/import/commit/` | **Async.** Same body, same envelope. On `success`, `result` is `{created, updated, skipped, errors}`. Upsert key is `sku`. Category/Brand are auto-created by name; when a row has both a category and a non-empty characteristic value, the `CharacteristicType.categories` M2M is auto-extended. The server also deletes the upload session + reader cache after a successful commit. |
 | GET | `/products/import/jobs/<uuid>/` | Poll an import job. Returns the same envelope. Scoped to the requesting user (others get 404). `stage` is a short Russian sentence describing what the worker is doing right now (`'Применяем pipeline'`, `'Валидируем строки'`, `'Записываем в БД'`); empty after the job completes. |
+
+### Characteristic types CRUD + safe mutation flow
+
+The page at `src/features/product/pages/CharacteristicTypesPage.tsx` is the admin surface for `CharacteristicType`. It already covers create + delete; the items below are pending work.
+
+**Filter toolbar.** Above the table: `TextInput` (search, debounced ~300ms), `MultiSelect` of categories, `Select` for `value_type` (with an "Любой" option), `SegmentedControl` for `required` (`all` / `yes` / `no`). The hook `useCharacteristicTypes` (and the keys in `queryKeys.ts`) must take these filters as part of the query key so cache is partitioned correctly. Backend accepts repeated `?category=` params — pass them as multi-value query string.
+
+**View modal — `CharacteristicTypeDetailModal.tsx`.** Read-only render of one type. The serializer already returns `categories_detail: [{id, name, level}]`, so do **not** fetch `/categories/` again — render the badges/tree straight from the payload. Clicking a category navigates to `/categories?focus=<id>` (or whatever convention the categories page uses).
+
+**Edit modal — `CharacteristicTypeEditModal.tsx`.** Editable fields are split into two groups:
+
+- *Safe* (`label`, `unit`, `options`, `required`, `categories`) — submitted via plain `PATCH /characteristic-types/<id>/`. One round-trip.
+- *Migrating* (`name`, `value_type`) — **never** sent via PATCH; the backend will 400 with a hint to use the dedicated endpoints. The modal detects a change to either field and routes through a wizard instead.
+
+**Wizard for `value_type` changes.**
+1. On submit, if `value_type` differs, call `POST /retype/preview/`.
+2. If `invalid_count === 0`, jump straight to `POST /retype/commit/` with `{new_value_type, fallback: 'drop'}` (fallback is irrelevant but required).
+3. Otherwise open `CharacteristicRetypeConflictModal.tsx`:
+   - If `unique_invalid.length < 10` → per-value table: each row shows the raw value (read-only) + a `TextInput` for a replacement. Bottom-of-form: a `Select` (`'drop' | 'null' | 'default'`) used as a fallback for any value the user leaves blank, plus a `TextInput` for `default_value` when applicable.
+   - Otherwise → a single `Select` fallback + optional `default_value` (no per-value editing).
+   - Submit composes `{new_value_type, fallback, default_value?, value_map?: {<raw>: <replacement>}}` and posts to `commit`. The keys in `value_map` MUST match the strings returned by preview (`unique_invalid[i].value`) verbatim — that's the matching key on the backend.
+4. Backend returns 202 + a `CharMutationJob`; flip into the progress view.
+
+**Wizard for `name` changes.** Same pattern, but calls `POST /rename/preview/` first. If `collision_count === 0` → straight to `commit` with `on_conflict: 'overwrite'` (no choice needed). Otherwise show a small modal listing the collisions (SKUs are returned) and a `SegmentedControl` for `on_conflict` (`'overwrite' | 'keep_existing' | 'skip_row'`), then post to `rename/commit`.
+
+**Progress / polling.** Add `useCharMutationJob(jobId)` — copy of `useImportJob`: `useQuery` with `refetchInterval: 2000`, stop polling when `status ∈ {'success', 'error'}`. Job envelope shape mirrors `ImportJob` plus `stage`, `char_type`, `payload`. Show the current `stage` next to a spinner; on terminal status, invalidate `['characteristic-types']`, `['products']`, and `['products', 'facets']` (a retype/rename changes both the type metadata and every product's JSONB, so the facet cache is stale).
+
+**New API surface in `src/features/product/api.ts`.** Five functions: `previewRetype(id, body)`, `commitRetype(id, body)`, `previewRename(id, body)`, `commitRename(id, body)`, `getCharMutationJob(id)`. New types in `types.ts`: `CharMutationJob`, `RetypePreviewResponse`, `RenamePreviewResponse`, and the two payload shapes. Query keys: `['characteristic-types', 'mutation-job', id]` for the polled job.
+
+**Tests (`src/features/product/__tests__/CharacteristicTypesPage.test.tsx`).** MSW handlers for the four preview/commit endpoints + the polling endpoint. Cases: filter params hit the backend query string; detail modal renders `categories_detail` without a second fetch; retype with 0 conflicts skips the conflict modal; retype with conflicts < 10 renders the per-value table and submits `value_map`; retype with conflicts ≥ 10 renders the fallback-only form; rename without collision skips the conflict modal; rename with collision exposes `on_conflict`.
 
 ### Import flow (two-step wizard, async)
 

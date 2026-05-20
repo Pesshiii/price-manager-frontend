@@ -3,8 +3,12 @@ import { http, HttpResponse } from 'msw';
 import { server } from '@/test/msw';
 import {
   commitImport,
+  commitRetype,
+  getCharMutationJob,
+  listCharacteristicTypes,
   listProducts,
   previewImport,
+  previewRetype,
   updateProduct,
 } from '../api';
 import { emptyFilters, type ProductFilters } from '../types';
@@ -130,5 +134,114 @@ describe('product api', () => {
     expect(job.id).toBe('11111111-1111-1111-1111-111111111111');
     expect(job.kind).toBe('commit');
     expect(job.status).toBe('pending');
+  });
+
+  it('listCharacteristicTypes serializes multi-category + value_type + required', async () => {
+    let capturedUrl: URL | null = null;
+    server.use(
+      http.get('/api/products/characteristic-types/', ({ request }) => {
+        capturedUrl = new URL(request.url);
+        return HttpResponse.json({ count: 0, next: null, previous: null, results: [] });
+      }),
+    );
+
+    await listCharacteristicTypes({
+      category: [1, 2],
+      value_type: 'integer',
+      required: true,
+      search: 'вес',
+    });
+
+    const params = capturedUrl!.searchParams;
+    // category appears twice with different ids
+    expect(params.getAll('category')).toEqual(['1', '2']);
+    expect(params.get('value_type')).toBe('integer');
+    expect(params.get('required')).toBe('true');
+    expect(params.get('search')).toBe('вес');
+  });
+
+  it('previewRetype POSTs the new value_type and returns the conflict surface', async () => {
+    let body: unknown = null;
+    server.use(
+      http.post('/api/products/characteristic-types/5/retype/preview/', async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({
+          total_with_key: 3,
+          invalid_count: 2,
+          unique_invalid: [{ value: 'много', count: 2 }],
+          truncated: false,
+        });
+      }),
+    );
+
+    const result = await previewRetype(5, { new_value_type: 'integer' });
+    expect(body).toEqual({ new_value_type: 'integer' });
+    expect(result.invalid_count).toBe(2);
+    expect(result.unique_invalid[0].value).toBe('много');
+  });
+
+  it('commitRetype returns a CharMutationJob envelope and accepts value_map', async () => {
+    let body: unknown = null;
+    server.use(
+      http.post('/api/products/characteristic-types/5/retype/commit/', async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json(
+          {
+            id: 'job-uuid',
+            kind: 'retype',
+            status: 'pending',
+            stage: '',
+            char_type: 5,
+            payload: {},
+            result: null,
+            error: '',
+            created_at: '',
+            started_at: null,
+            finished_at: null,
+          },
+          { status: 202 },
+        );
+      }),
+    );
+
+    const job = await commitRetype(5, {
+      new_value_type: 'integer',
+      fallback: 'drop',
+      value_map: { 'много': '100' },
+    });
+    expect(body).toEqual({
+      new_value_type: 'integer',
+      fallback: 'drop',
+      value_map: { 'много': '100' },
+    });
+    expect(job.id).toBe('job-uuid');
+    expect(job.kind).toBe('retype');
+  });
+
+  it('getCharMutationJob hits the jobs endpoint', async () => {
+    let called = false;
+    server.use(
+      http.get('/api/products/characteristic-types/jobs/abc/', () => {
+        called = true;
+        return HttpResponse.json({
+          id: 'abc',
+          kind: 'retype',
+          status: 'success',
+          stage: '',
+          char_type: 5,
+          payload: {},
+          result: { updated: 3 },
+          error: '',
+          created_at: '',
+          started_at: '',
+          finished_at: '',
+        });
+      }),
+    );
+
+    const job = await getCharMutationJob('abc');
+    expect(called).toBe(true);
+    expect(job.status).toBe('success');
+    expect(job.result?.updated).toBe(3);
   });
 });

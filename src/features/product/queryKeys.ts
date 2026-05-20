@@ -22,7 +22,7 @@ export const brandKeys = {
 
 export const charTypeKeys = {
   all: ['characteristic-types'] as const,
-  list: (params?: { category?: number; search?: string; page?: number; page_size?: number }) =>
+  list: (params?: Record<string, unknown>) =>
     [...charTypeKeys.all, 'list', params ?? {}] as const,
   detail: (id: number) => [...charTypeKeys.all, 'detail', id] as const,
 };
@@ -30,4 +30,10 @@ export const charTypeKeys = {
 export const importJobKeys = {
   all: ['import-jobs'] as const,
   detail: (id: string | null) => [...importJobKeys.all, 'detail', id] as const,
+};
+
+export const charMutationJobKeys = {
+  all: ['char-mutation-jobs'] as const,
+  detail: (id: string | null) =>
+    [...charMutationJobKeys.all, 'detail', id] as const,
 };

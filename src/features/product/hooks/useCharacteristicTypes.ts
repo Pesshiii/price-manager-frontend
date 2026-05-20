@@ -21,7 +21,7 @@ export function useCharacteristicTypes(params: ListCharTypesParams = {}) {
     params.page_size !== undefined ||
     params.page !== undefined;
   return useQuery({
-    queryKey: charTypeKeys.list(params),
+    queryKey: charTypeKeys.list(params as unknown as Record<string, unknown>),
     queryFn: () => listCharacteristicTypes(params),
     staleTime: 5 * 60_000,
     enabled: hasScope,

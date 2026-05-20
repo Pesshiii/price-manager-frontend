@@ -23,6 +23,12 @@ export interface Brand {
   slug: string;
 }
 
+export interface CategoryRef {
+  id: number;
+  name: string;
+  level: number;
+}
+
 export interface CharacteristicType {
   id: number;
   name: string;
@@ -32,7 +38,68 @@ export interface CharacteristicType {
   unit: string;
   required: boolean;
   categories: number[];
+  /** Read-only sibling of `categories` — names + MPTT level for the detail modal. */
+  categories_detail?: CategoryRef[];
 }
+
+// ---- Safe-mutation (retype / rename) types --------------------------------
+
+export type Fallback = 'drop' | 'null' | 'default';
+export type RenameConflict = 'overwrite' | 'keep_existing' | 'skip_row';
+
+export interface RetypePreviewResponse {
+  total_with_key: number;
+  invalid_count: number;
+  /** Unique raw values that won't coerce, capped at 200 (see `truncated`). */
+  unique_invalid: Array<{ value: string; count: number }>;
+  truncated: boolean;
+}
+
+export interface RetypeCommitPayload {
+  new_value_type: ValueType;
+  fallback: Fallback;
+  /** Required only when `fallback === 'default'`. */
+  default_value?: unknown;
+  /**
+   * Per-raw-value overrides. Keys MUST match the strings in `unique_invalid[i].value`
+   * verbatim — the backend keys conflicts by `str(raw)` (`'true'`/`'false'` for booleans).
+   */
+  value_map?: Record<string, unknown>;
+}
+
+export interface RenamePreviewResponse {
+  total_to_rename: number;
+  collision_count: number;
+  /** Products that already carry both keys, capped at 100. */
+  collisions: Array<{ product_id: number; sku: string }>;
+}
+
+export interface RenameCommitPayload {
+  new_name: string;
+  on_conflict: RenameConflict;
+}
+
+export type CharMutationJobKind = 'retype' | 'rename';
+export type CharMutationJobStatus = 'pending' | 'running' | 'success' | 'error';
+
+export interface CharMutationJob {
+  id: string;
+  kind: CharMutationJobKind;
+  status: CharMutationJobStatus;
+  /** Short Russian sentence describing the current worker step (empty after terminal). */
+  stage: string;
+  char_type: number;
+  payload: Record<string, unknown>;
+  result: Record<string, number> | null;
+  error: string;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+/** Threshold below which the retype wizard renders a per-value override table
+ *  instead of a single fallback. Mirrors the backend constant of the same name. */
+export const SMALL_INVALID_THRESHOLD = 10;
 
 export type CharacteristicValue = string | number | boolean;
 

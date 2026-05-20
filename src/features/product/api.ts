@@ -3,6 +3,7 @@ import type {
   Brand,
   Category,
   CharacteristicType,
+  CharMutationJob,
   FacetsResponse,
   ImportJob,
   ImportRequestBody,
@@ -10,6 +11,11 @@ import type {
   Product,
   ProductFilters,
   ProductWritePayload,
+  RenameCommitPayload,
+  RenamePreviewResponse,
+  RetypeCommitPayload,
+  RetypePreviewResponse,
+  ValueType,
 } from './types';
 
 const BASE = '/products';
@@ -129,8 +135,11 @@ export async function deleteBrand(id: number): Promise<void> {
 }
 
 export interface ListCharTypesParams {
-  category?: number;
+  /** Either a single category id or an array — backend accepts repeated `?category=`. */
+  category?: number | number[];
   search?: string;
+  value_type?: ValueType;
+  required?: boolean;
   /** Bulk-fetch metadata for explicit names (e.g. labels for already-bound chars). */
   name__in?: string[];
   page?: number;
@@ -141,13 +150,23 @@ export interface ListCharTypesParams {
  * Backend paginates `/characteristic-types/` with default `page_size=200` and
  * `max_page_size=2000`. Pass `page_size: 2000` to fetch everything in one go
  * (admin pages only — list freezes the UI when N >> 200).
+ *
+ * Filters: `search` (icontains over name+label), `category` (one id or array
+ * — repeated query params on the wire), `value_type`, `required`.
  */
 export async function listCharacteristicTypes(
   params: ListCharTypesParams = {},
 ): Promise<Paginated<CharacteristicType>> {
   const search = new URLSearchParams();
-  if (params.category !== undefined) search.append('category', String(params.category));
+  if (params.category !== undefined) {
+    const ids = Array.isArray(params.category) ? params.category : [params.category];
+    for (const id of ids) search.append('category', String(id));
+  }
   if (params.search) search.append('search', params.search);
+  if (params.value_type) search.append('value_type', params.value_type);
+  if (params.required !== undefined) {
+    search.append('required', params.required ? 'true' : 'false');
+  }
   if (params.name__in && params.name__in.length > 0) {
     search.append('name__in', params.name__in.join(','));
   }
@@ -207,5 +226,67 @@ export async function commitImport(body: ImportRequestBody): Promise<ImportJob> 
 
 export async function getImportJob(jobId: string): Promise<ImportJob> {
   const { data } = await api.get<ImportJob>(`${BASE}/import/jobs/${jobId}/`);
+  return data;
+}
+
+// ----- CharacteristicType safe-mutation endpoints --------------------------
+//
+// `name` and `value_type` are not editable through the regular PATCH endpoint
+// (the backend will 400) because both require a JSONB migration of every
+// product carrying the characteristic. These endpoints do the migration:
+//
+//   preview/  — synchronous, returns the conflict surface (unique invalid
+//               values for retype; product collisions for rename).
+//   commit/   — async, returns a CharMutationJob (202) that the client polls
+//               via getCharMutationJob() until status == 'success' | 'error'.
+
+export async function previewRetype(
+  id: number,
+  body: { new_value_type: ValueType },
+): Promise<RetypePreviewResponse> {
+  const { data } = await api.post<RetypePreviewResponse>(
+    `${BASE}/characteristic-types/${id}/retype/preview/`,
+    body,
+  );
+  return data;
+}
+
+export async function commitRetype(
+  id: number,
+  body: RetypeCommitPayload,
+): Promise<CharMutationJob> {
+  const { data } = await api.post<CharMutationJob>(
+    `${BASE}/characteristic-types/${id}/retype/commit/`,
+    body,
+  );
+  return data;
+}
+
+export async function previewRename(
+  id: number,
+  body: { new_name: string },
+): Promise<RenamePreviewResponse> {
+  const { data } = await api.post<RenamePreviewResponse>(
+    `${BASE}/characteristic-types/${id}/rename/preview/`,
+    body,
+  );
+  return data;
+}
+
+export async function commitRename(
+  id: number,
+  body: RenameCommitPayload,
+): Promise<CharMutationJob> {
+  const { data } = await api.post<CharMutationJob>(
+    `${BASE}/characteristic-types/${id}/rename/commit/`,
+    body,
+  );
+  return data;
+}
+
+export async function getCharMutationJob(jobId: string): Promise<CharMutationJob> {
+  const { data } = await api.get<CharMutationJob>(
+    `${BASE}/characteristic-types/jobs/${jobId}/`,
+  );
   return data;
 }
