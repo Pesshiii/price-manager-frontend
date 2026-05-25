@@ -6,6 +6,7 @@ import {
   Group,
   Loader,
   Modal,
+  Progress,
   Radio,
   Select,
   Stack,
@@ -530,12 +531,31 @@ export function ImportPage() {
             )}
             {previewResult && <ImportPreviewResults result={previewResult} />}
             {commitInFlight && (
-              <Group>
-                <Loader size="sm" />
-                <Text c="dimmed">
-                  {commitJobQuery.data?.stage || 'Импортируем — можно подождать или вернуться позже'}
-                </Text>
-              </Group>
+              <Stack gap="xs">
+                <Group>
+                  <Loader size="sm" />
+                  <Text c="dimmed">
+                    {commitJobQuery.data?.stage || 'Импортируем — можно подождать или вернуться позже'}
+                  </Text>
+                  {(commitJobQuery.data?.rows_total ?? 0) > 0 && (
+                    <Text c="dimmed" size="sm">
+                      {commitJobQuery.data?.rows_done ?? 0} / {commitJobQuery.data?.rows_total}
+                    </Text>
+                  )}
+                </Group>
+                {(commitJobQuery.data?.rows_total ?? 0) > 0 ? (
+                  <Progress
+                    value={
+                      ((commitJobQuery.data?.rows_done ?? 0) /
+                        (commitJobQuery.data?.rows_total ?? 1)) *
+                      100
+                    }
+                    animated
+                  />
+                ) : (
+                  <Progress value={100} animated striped />
+                )}
+              </Stack>
             )}
             {commitResult && (
               <Alert color="green" title="Импорт выполнен">

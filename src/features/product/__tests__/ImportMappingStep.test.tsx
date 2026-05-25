@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { useState } from 'react';
 import userEvent from '@testing-library/user-event';
 import { screen, within } from '@testing-library/react';
 import { renderWithProviders } from '@/test/renderWithProviders';
@@ -103,6 +104,48 @@ describe('ImportMappingStep', () => {
     expect(onChange).toHaveBeenCalledWith({
       dynamic_characteristics: [{ name_column: 'attr_name', value_column: '' }],
     });
+  });
+
+  it('keeps stable DOM identity for unaffected dynamic rows on edit', async () => {
+    // Memoization guard: editing row 0 must not remount row 1's inputs. We
+    // detect remounts by tagging the row's container with a DOM property and
+    // checking it survives a re-render driven by parent state change.
+    const user = userEvent.setup();
+    type Renderable = { mapping: ImportMapping };
+    let lastMapping: ImportMapping = {
+      dynamic_characteristics: [
+        { name_column: '', value_column: '' },
+        { name_column: '', value_column: '' },
+      ],
+    };
+
+    function Harness({ mapping }: Renderable) {
+      const [m, setM] = useState<ImportMapping>(mapping);
+      lastMapping = m;
+      return (
+        <ImportMappingStep
+          columns={['c1', 'c2', 'c3']}
+          characteristicTypes={[]}
+          mapping={m}
+          onChange={setM}
+        />
+      );
+    }
+
+    renderWithProviders(<Harness mapping={lastMapping} />);
+
+    const row1 = screen.getByTestId('dynamic-row-1');
+    // Tag the row node — if React remounts it during the edit, the tag is lost.
+    (row1 as unknown as { __tag: string }).__tag = 'survivor';
+
+    const row0NameSelect = screen.getByRole('textbox', { name: 'Имя из колонки (группа 1)' });
+    await user.click(row0NameSelect);
+    await user.click(await screen.findByRole('option', { name: 'c1' }));
+
+    const row1After = screen.getByTestId('dynamic-row-1');
+    expect((row1After as unknown as { __tag?: string }).__tag).toBe('survivor');
+    expect(lastMapping.dynamic_characteristics?.[0].name_column).toBe('c1');
+    expect(lastMapping.dynamic_characteristics?.[1].name_column).toBe('');
   });
 
   it('removing the only dynamic group drops the key from the mapping', async () => {

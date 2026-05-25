@@ -235,6 +235,10 @@ export interface ImportJob {
   kind: ImportJobKind;
   status: ImportJobStatus;
   stage: string;
+  /** Total rows to commit (set after apply_mapping). 0 means "not yet known". */
+  rows_total: number;
+  /** Rows already written to DB. Climbs in IMPORT_COMMIT_BATCH_SIZE steps. */
+  rows_done: number;
   result: ImportPreviewResult | ImportCommitResult | null;
   error: string;
   created_at: string;
