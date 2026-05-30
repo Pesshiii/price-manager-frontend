@@ -8,7 +8,7 @@
  *  4. HTTP 409 on delete shows error without crash
  *  5. "Новая конфигурация" button opens modal
  *  6. File drop → upload session → preview → column selects populate
- *  7. Submit create → POST /api/supplier-feed/mappings/
+ *  7. Submit create → POST /api/suppliers/mappings/
  *  8. Edit row pre-populates all fields
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -40,8 +40,8 @@ const MAPPINGS: FeedMapping[] = [
 /** Register the "happy path" MSW handlers used by most tests. */
 function mockDefaults(mappings: FeedMapping[] = MAPPINGS) {
   server.use(
-    http.get('/api/supplier-feed/mappings/', () => HttpResponse.json(mappings)),
-    http.get('/api/suppliers/', () => HttpResponse.json(SUPPLIERS)),
+    http.get('/api/suppliers/mappings/', () => HttpResponse.json(mappings)),
+    http.get('/api/suppliers/suppliers/', () => HttpResponse.json(SUPPLIERS)),
   );
 }
 
@@ -75,14 +75,14 @@ describe('MappingsPage — list', () => {
     mockDefaults();
     let deleted = false;
     server.use(
-      http.delete('/api/supplier-feed/mappings/1/', () => {
+      http.delete('/api/suppliers/mappings/1/', () => {
         deleted = true;
         return new HttpResponse(null, { status: 204 });
       }),
     );
     // After delete, return empty list so the row disappears
     server.use(
-      http.get('/api/supplier-feed/mappings/', () =>
+      http.get('/api/suppliers/mappings/', () =>
         deleted ? HttpResponse.json([]) : HttpResponse.json(MAPPINGS),
       ),
     );
@@ -109,7 +109,7 @@ describe('MappingsPage — list', () => {
   it('shows an error message when delete returns 409', async () => {
     mockDefaults();
     server.use(
-      http.delete('/api/supplier-feed/mappings/1/', () =>
+      http.delete('/api/suppliers/mappings/1/', () =>
         HttpResponse.json({ detail: 'Активные сессии' }, { status: 409 }),
       ),
     );
@@ -192,10 +192,10 @@ describe('MappingsPage — create modal', () => {
   });
 
   // ── slice 7: submit create ────────────────────────────────────────────────────
-  it('submitting the modal POSTs to /api/supplier-feed/mappings/', async () => {
+  it('submitting the modal POSTs to /api/suppliers/mappings/', async () => {
     let posted: unknown;
     server.use(
-      http.post('/api/supplier-feed/mappings/', async ({ request }) => {
+      http.post('/api/suppliers/mappings/', async ({ request }) => {
         posted = await request.json();
         return HttpResponse.json({ ...MAPPINGS[0], id: 99 }, { status: 201 });
       }),

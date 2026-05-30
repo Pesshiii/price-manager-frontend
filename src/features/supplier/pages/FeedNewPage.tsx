@@ -1,5 +1,5 @@
 /**
- * FeedNewPage — two-step wizard for creating a new SupplierFeedSummary.
+ * FeedNewPage — two-step wizard for creating a new SupplierFeed.
  *
  * Step 1 — Configuration selection
  *   • Select Поставщик (from useSuppliers)
@@ -14,13 +14,12 @@
  *   • "Обработать" — disabled when list empty; on click: POST …/process/ → navigate to detail
  */
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   ActionIcon,
   Button,
   Group,
   Modal,
-  MultiSelect,
   NumberInput,
   Select,
   Stack,
@@ -32,8 +31,6 @@ import { Dropzone } from '@mantine/dropzone';
 import { useDisclosure } from '@mantine/hooks';
 import { IconTrash, IconUpload } from '@tabler/icons-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { previewPipeline, uploadSession } from '@/features/dataframe/api';
-import { isPreviewError } from '@/features/dataframe/types';
 import {
   createFeedMapping,
   createSupplierFeed,
@@ -44,7 +41,7 @@ import {
 import { useFeedMappings } from '../hooks/useFeedMappings';
 import { useSuppliers } from '../hooks/useSuppliers';
 import { feedMappingKeys } from '../queryKeys';
-import type { FeedFile, SupplierFeedSummary } from '../types';
+import type { FeedFile, SupplierFeed } from '../types';
 
 // ── Step 1 ────────────────────────────────────────────────────────────────────
 
@@ -117,10 +114,10 @@ function Step1({
 // ── Step 2 ────────────────────────────────────────────────────────────────────
 
 interface Step2Props {
-  feed: SupplierFeedSummary;
+  feed: SupplierFeed;
   files: FeedFile[];
   onDrop: (files: File[]) => void;
-  onDeleteFile: (sessionId: string) => void;
+  onDeleteFile: (fileId: number) => void;
   onProcess: () => void;
   uploading: boolean;
   processing: boolean;
@@ -145,13 +142,13 @@ function Step2({ feed: _feed, files, onDrop, onDeleteFile, onProcess, uploading,
       {files.length > 0 && (
         <Stack gap="xs">
           {files.map((f) => (
-            <Group key={f.session_id} justify="space-between">
+            <Group key={f.id} justify="space-between">
               <Text size="sm">{f.filename}</Text>
               <ActionIcon
                 variant="subtle"
                 color="red"
                 aria-label={`Удалить файл ${f.filename}`}
-                onClick={() => onDeleteFile(f.session_id)}
+                onClick={() => onDeleteFile(f.id)}
               >
                 <IconTrash size={14} />
               </ActionIcon>
@@ -185,71 +182,32 @@ interface NewMappingModalProps {
 function NewMappingModal({ opened, supplierId, onClose, onCreated }: NewMappingModalProps) {
   const [name, setName] = useState('');
   const [threshold, setThreshold] = useState<number | string>(0.8);
-  const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
-  const [skuColumn, setSkuColumn] = useState('');
-  const [identityColumns, setIdentityColumns] = useState<string[]>([]);
-  const [variableColumns, setVariableColumns] = useState<string[]>([]);
-  const [detecting, setDetecting] = useState(false);
-  const [detectError, setDetectError] = useState<string | null>(null);
 
   const createMutation = useMutation({
     mutationFn: createFeedMapping,
     onSuccess: (mapping) => {
       onCreated(mapping.id, mapping.name);
-      resetForm();
+      setName('');
+      setThreshold(0.8);
     },
   });
-
-  function resetForm() {
-    setName('');
-    setThreshold(0.8);
-    setDetectedColumns([]);
-    setSkuColumn('');
-    setIdentityColumns([]);
-    setVariableColumns([]);
-    setDetectError(null);
-  }
-
-  async function handleFileDrop(files: File[]) {
-    const file = files[0];
-    if (!file) return;
-    setDetecting(true);
-    setDetectError(null);
-    try {
-      const { session_id } = await uploadSession(file);
-      const result = await previewPipeline({
-        sessionId: session_id,
-        instructions: { reader: { func: 'auto', args: {} }, transforms: [] },
-      });
-      if (isPreviewError(result)) {
-        setDetectError(result.error.message);
-      } else {
-        setDetectedColumns(result.columns);
-      }
-    } catch {
-      setDetectError('Не удалось определить столбцы файла');
-    } finally {
-      setDetecting(false);
-    }
-  }
 
   function handleSubmit() {
     createMutation.mutate({
       supplier: supplierId,
       name,
-      supplier_sku_column: skuColumn,
-      identity_columns: identityColumns,
-      variable_columns: variableColumns,
+      supplier_sku_column: '',
+      identity_columns: [],
+      variable_columns: [],
       auto_match_threshold: Number(threshold),
     });
   }
 
   function handleClose() {
-    resetForm();
+    setName('');
+    setThreshold(0.8);
     onClose();
   }
-
-  const colOptions = detectedColumns.map((c) => ({ value: c, label: c }));
 
   return (
     <Modal opened={opened} onClose={handleClose} title="Новая конфигурация">
@@ -269,50 +227,13 @@ function NewMappingModal({ opened, supplierId, onClose, onCreated }: NewMappingM
           value={threshold}
           onChange={(v) => setThreshold(v)}
         />
-
-        <Text size="sm" fw={500}>Определить столбцы из файла</Text>
-        <Dropzone
-          onDrop={handleFileDrop}
-          loading={detecting}
-          data-testid="column-dropzone"
-        >
-          <Group justify="center" style={{ pointerEvents: 'none' }}>
-            <IconUpload size={18} />
-            <Text size="sm">Перетащите файл или нажмите для выбора</Text>
-          </Group>
-        </Dropzone>
-        {detectError && <Text c="red" size="sm">{detectError}</Text>}
-
-        <Select
-          label="Столбец артикула поставщика"
-          placeholder="Выбрать столбец артикула"
-          required
-          data={colOptions}
-          value={skuColumn || null}
-          onChange={(v) => setSkuColumn(v ?? '')}
-        />
-
-        <MultiSelect
-          label="Столбцы идентификации"
-          data={colOptions}
-          value={identityColumns}
-          onChange={setIdentityColumns}
-        />
-
-        <MultiSelect
-          label="Переменные столбцы"
-          data={colOptions}
-          value={variableColumns}
-          onChange={setVariableColumns}
-        />
-
         <Group justify="flex-end">
           <Button variant="default" onClick={handleClose}>
             Отмена
           </Button>
           <Button
             loading={createMutation.isPending}
-            disabled={!name.trim() || !skuColumn}
+            disabled={!name.trim()}
             onClick={handleSubmit}
           >
             Создать
@@ -328,19 +249,16 @@ function NewMappingModal({ opened, supplierId, onClose, onCreated }: NewMappingM
 export function FeedNewPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [searchParams] = useSearchParams();
 
   // ── wizard state ───────────────────────────────────────────────────────────
   const [step, setStep] = useState<1 | 2>(1);
 
-  // step 1 — pre-populate from ?supplier= query param if present
-  const [supplierId, setSupplierId] = useState<string>(
-    searchParams.get('supplier') ?? '',
-  );
+  // step 1
+  const [supplierId, setSupplierId] = useState<string>('');
   const [mappingId, setMappingId] = useState<string>('');
 
   // step 1→2 transition result
-  const [feed, setFeed] = useState<SupplierFeedSummary | null>(null);
+  const [feed, setFeed] = useState<SupplierFeed | null>(null);
 
   // step 2
   const [files, setFiles] = useState<FeedFile[]>([]);
@@ -369,9 +287,8 @@ export function FeedNewPage() {
   });
 
   const deleteFileMutation = useMutation({
-    mutationFn: (sessionId: string) => deleteFeedFile(feed!.id, sessionId),
-    onSuccess: (_, sessionId) =>
-      setFiles((prev) => prev.filter((f) => f.session_id !== sessionId)),
+    mutationFn: (fileId: number) => deleteFeedFile(feed!.id, fileId),
+    onSuccess: (_, fileId) => setFiles((prev) => prev.filter((f) => f.id !== fileId)),
   });
 
   const processMutation = useMutation({
@@ -413,7 +330,7 @@ export function FeedNewPage() {
         onDrop={(acceptedFiles) => {
           acceptedFiles.forEach((file) => uploadMutation.mutate({ file }));
         }}
-        onDeleteFile={(sessionId) => deleteFileMutation.mutate(sessionId)}
+        onDeleteFile={(fileId) => deleteFileMutation.mutate(fileId)}
         onProcess={() => processMutation.mutate()}
         uploading={uploadMutation.isPending}
         processing={processMutation.isPending}
@@ -432,7 +349,7 @@ export function FeedNewPage() {
         onDalee={() =>
           createFeedMutation.mutate({
             supplier: Number(supplierId),
-            feed_mapping: Number(mappingId),
+            mapping: Number(mappingId),
           })
         }
         daleeLoading={createFeedMutation.isPending}

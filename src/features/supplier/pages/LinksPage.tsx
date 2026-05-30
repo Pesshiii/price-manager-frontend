@@ -127,7 +127,7 @@ export function LinksPage() {
   const { data: suppliers } = useSuppliers();
   const { data: links, isLoading } = useSupplierLinks({
     supplier: supplierFilter ? Number(supplierFilter) : undefined,
-    supplier_sku: skuFilter || undefined,
+    sku: skuFilter || undefined,
   });
 
   const deleteMutation = useMutation({
@@ -137,12 +137,16 @@ export function LinksPage() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, product }: { id: number; product: number }) =>
-      updateSupplierLink(id, { product_id: product }),
+      updateSupplierLink(id, { product }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: supplierLinkKeys.all });
       closeModal();
     },
   });
+
+  const supplierMap = Object.fromEntries(
+    (suppliers ?? []).map((s) => [s.id, s.name]),
+  );
 
   const supplierOptions = (suppliers ?? []).map((s) => ({
     value: String(s.id),
@@ -207,10 +211,10 @@ export function LinksPage() {
             <Table.Tbody>
               {(links ?? []).map((link) => (
                 <Table.Tr key={link.id}>
-                  <Table.Td>{link.supplier.name}</Table.Td>
+                  <Table.Td>{supplierMap[link.supplier] ?? `#${link.supplier}`}</Table.Td>
                   <Table.Td>{link.supplier_sku}</Table.Td>
-                  <Table.Td>{link.product.name}</Table.Td>
-                  <Table.Td>{link.product.sku}</Table.Td>
+                  <Table.Td>{link.product_name ?? `#${link.product}`}</Table.Td>
+                  <Table.Td>{link.product_sku ?? '—'}</Table.Td>
                   <Table.Td>
                     {new Date(link.created_at).toLocaleDateString('ru-RU')}
                   </Table.Td>

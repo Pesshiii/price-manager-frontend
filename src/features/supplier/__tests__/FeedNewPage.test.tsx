@@ -5,11 +5,11 @@
  *  1. Tracer: step 1 renders supplier + mapping selects
  *  2. Selecting a supplier re-fetches mappings with ?supplier=<id>
  *  3. "Далее" button disabled until both supplier + mapping chosen
- *  4. Clicking "Далее" POSTs /api/supplier-feed/feeds/ and shows step 2
+ *  4. Clicking "Далее" POSTs /api/suppliers/feeds/ and shows step 2
  *  5. "Новая конфигурация" opens modal; on save, new mapping auto-selects
- *  6. File drop in step 2 uploads to /api/supplier-feed/feeds/:id/upload/; filename in list
+ *  6. File drop in step 2 uploads to /api/suppliers/feeds/:id/upload/; filename in list
  *  7. "Обработать" disabled when file list empty; enabled after upload
- *  8. "Обработать" → POST /api/supplier-feed/feeds/:id/process/ → navigate to detail
+ *  8. "Обработать" → POST /api/suppliers/feeds/:id/process/ → navigate to detail
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { http, HttpResponse } from 'msw';
@@ -37,19 +37,18 @@ const MAPPING = {
 const FEED = {
   id: 42,
   supplier: 1,
-  feed_mapping: 5,
+  mapping: 5,
   status: 'draft',
-  total: 0,
-  matched: 0,
-  queued: 0,
-  skipped: 0,
+  total_rows: 0,
+  matched_rows: 0,
+  unmatched_rows: 0,
   error: null,
   created_at: '2026-05-26T10:00:00Z',
   updated_at: '2026-05-26T10:00:00Z',
 };
 
 const FEED_FILE = {
-  session_id: 'sess-file-1',
+  id: 1,
   filename: 'prices.xlsx',
   size: 4096,
   uploaded_at: '2026-05-26T10:01:00Z',
@@ -60,9 +59,9 @@ const FEED_FILE = {
 /** Default handlers used by most tests. */
 function baseHandlers() {
   return [
-    http.get('/api/suppliers/', () => HttpResponse.json([SUPPLIER])),
-    http.get('/api/supplier-feed/mappings/', () => HttpResponse.json([MAPPING])),
-    http.post('/api/supplier-feed/feeds/', () => HttpResponse.json(FEED, { status: 201 })),
+    http.get('/api/suppliers/suppliers/', () => HttpResponse.json([SUPPLIER])),
+    http.get('/api/suppliers/mappings/', () => HttpResponse.json([MAPPING])),
+    http.post('/api/suppliers/feeds/', () => HttpResponse.json(FEED, { status: 201 })),
   ];
 }
 
@@ -81,7 +80,7 @@ function renderPage() {
 
 /**
  * Advance the wizard past step 1 by selecting supplier + mapping + clicking Далее.
- * Requires baseHandlers (including POST /api/supplier-feed/feeds/) to be registered.
+ * Requires baseHandlers (including POST /api/suppliers/feeds/) to be registered.
  */
 async function goToStep2(user: ReturnType<typeof userEvent.setup>) {
   const supplierInput = await screen.findByPlaceholderText('Выбрать поставщика');
@@ -121,7 +120,7 @@ describe('FeedNewPage', () => {
   it('selecting a supplier re-fetches mappings with ?supplier=<id>', async () => {
     let lastMappingUrl: string | null = null;
     server.use(
-      http.get('/api/supplier-feed/mappings/', ({ request }) => {
+      http.get('/api/suppliers/mappings/', ({ request }) => {
         lastMappingUrl = request.url;
         return HttpResponse.json([MAPPING]);
       }),
@@ -168,10 +167,10 @@ describe('FeedNewPage', () => {
 
   // ── Slice 4: clicking "Далее" POSTs feed + renders step 2 ───────────────────
 
-  it('clicking "Далее" POSTs /api/supplier-feed/feeds/ with supplier+feed_mapping and shows step 2', async () => {
+  it('clicking "Далее" POSTs /api/suppliers/feeds/ with supplier+mapping and shows step 2', async () => {
     let posted: unknown;
     server.use(
-      http.post('/api/supplier-feed/feeds/', async ({ request }) => {
+      http.post('/api/suppliers/feeds/', async ({ request }) => {
         posted = await request.json();
         return HttpResponse.json(FEED, { status: 201 });
       }),
@@ -181,7 +180,7 @@ describe('FeedNewPage', () => {
     renderPage();
     await goToStep2(user);
 
-    expect(posted).toMatchObject({ supplier: 1, feed_mapping: 5 });
+    expect(posted).toMatchObject({ supplier: 1, mapping: 5 });
     expect(document.querySelector('[data-testid="feed-dropzone"]')).toBeTruthy();
   });
 
@@ -192,26 +191,13 @@ describe('FeedNewPage', () => {
     let mappingsList = [MAPPING];
 
     server.use(
-      http.get('/api/supplier-feed/mappings/', () => HttpResponse.json(mappingsList)),
-      http.post('/api/supplier-feed/mappings/', async ({ request }) => {
+      http.get('/api/suppliers/mappings/', () => HttpResponse.json(mappingsList)),
+      http.post('/api/suppliers/mappings/', async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>;
         const created = { ...MAPPING, id: 99, name: String(body.name ?? '') };
         mappingsList = [...mappingsList, created];
         return HttpResponse.json(created, { status: 201 });
       }),
-      http.post('/api/dataframe/sessions/', () =>
-        HttpResponse.json({ session_id: 'sess-col', filename: 'f.csv', size: 100 }),
-      ),
-      http.post('/api/dataframe/preview/', () =>
-        HttpResponse.json({
-          columns: ['sku', 'name', 'price'],
-          rows: [],
-          total_rows: 0,
-          returned_rows: 0,
-          offset: 0,
-          has_more: false,
-        }),
-      ),
     );
 
     const user = userEvent.setup();
@@ -231,20 +217,6 @@ describe('FeedNewPage', () => {
     const nameInput = screen.getByLabelText(/название/i);
     await user.type(nameInput, NEW_NAME);
 
-    // Drop a sample file to detect columns
-    const file = new File(['data'], 'f.csv', { type: 'text/csv' });
-    const modalDropzone = screen
-      .getByRole('dialog')
-      .querySelector('[data-testid="column-dropzone"]') as HTMLElement;
-    fireEvent.drop(modalDropzone, { dataTransfer: { files: [file], types: ['Files'] } });
-
-    // Wait for column detection to complete
-    await waitFor(() => expect(screen.getAllByText('sku').length).toBeGreaterThan(0));
-
-    // Select the supplier_sku_column
-    await user.click(screen.getByPlaceholderText('Выбрать столбец артикула'));
-    await user.click(await screen.findByRole('option', { name: 'sku' }));
-
     // Submit
     await user.click(screen.getByRole('button', { name: /создать/i }));
 
@@ -255,115 +227,11 @@ describe('FeedNewPage', () => {
     });
   });
 
-  // ── Slice 9: "Создать" blocked until supplier_sku_column selected ─────────────
-
-  it('"Создать" in modal is disabled until supplier_sku_column is selected', async () => {
-    server.use(
-      http.post('/api/dataframe/sessions/', () =>
-        HttpResponse.json({ session_id: 'sess-col', filename: 'f.csv', size: 100 }),
-      ),
-      http.post('/api/dataframe/preview/', () =>
-        HttpResponse.json({
-          columns: ['sku', 'name', 'price'],
-          rows: [],
-          total_rows: 0,
-          returned_rows: 0,
-          offset: 0,
-          has_more: false,
-        }),
-      ),
-    );
-
-    const user = userEvent.setup();
-    renderPage();
-
-    // Select a supplier and open modal
-    const supplierInput = await screen.findByPlaceholderText('Выбрать поставщика');
-    await user.click(supplierInput);
-    await user.click(await screen.findByRole('option', { name: 'ООО Ромашка' }));
-
-    await user.click(screen.getByRole('button', { name: /новая конфигурация/i }));
-    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-
-    // Type a name → "Создать" still disabled (no column)
-    await user.type(screen.getByLabelText(/название/i), 'Config A');
-    const createBtn = screen.getByRole('button', { name: /создать/i });
-    expect(createBtn).toBeDisabled();
-
-    // Drop a file to get columns
-    const file = new File(['data'], 'f.csv', { type: 'text/csv' });
-    const dropzone = screen
-      .getByRole('dialog')
-      .querySelector('[data-testid="column-dropzone"]') as HTMLElement;
-    fireEvent.drop(dropzone, { dataTransfer: { files: [file], types: ['Files'] } });
-
-    // Wait for column options to be available
-    await waitFor(() => expect(screen.getAllByText('sku').length).toBeGreaterThan(0));
-
-    // Still disabled — column not selected yet
-    expect(createBtn).toBeDisabled();
-
-    // Select a column
-    await user.click(screen.getByPlaceholderText('Выбрать столбец артикула'));
-    await user.click(await screen.findByRole('option', { name: 'sku' }));
-
-    await waitFor(() => {
-      expect(createBtn).not.toBeDisabled();
-    });
-  });
-
-  // ── Slice 10: file drop in modal populates the column select ──────────────────
-
-  it('file drop in "Новая конфигурация" modal populates the column select with detected columns', async () => {
-    server.use(
-      http.post('/api/dataframe/sessions/', () =>
-        HttpResponse.json({ session_id: 'sess-col', filename: 'f.csv', size: 100 }),
-      ),
-      http.post('/api/dataframe/preview/', () =>
-        HttpResponse.json({
-          columns: ['sku', 'name', 'price'],
-          rows: [],
-          total_rows: 0,
-          returned_rows: 0,
-          offset: 0,
-          has_more: false,
-        }),
-      ),
-    );
-
-    const user = userEvent.setup();
-    renderPage();
-
-    // Select a supplier and open the modal
-    const supplierInput = await screen.findByPlaceholderText('Выбрать поставщика');
-    await user.click(supplierInput);
-    await user.click(await screen.findByRole('option', { name: 'ООО Ромашка' }));
-
-    await user.click(screen.getByRole('button', { name: /новая конфигурация/i }));
-    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-
-    // Drop a sample file on the modal's dropzone
-    const file = new File(['data'], 'f.csv', { type: 'text/csv' });
-    const dropzone = screen
-      .getByRole('dialog')
-      .querySelector('[data-testid="column-dropzone"]') as HTMLElement;
-    fireEvent.drop(dropzone, { dataTransfer: { files: [file], types: ['Files'] } });
-
-    // Column options should appear after upload+preview complete
-    await waitFor(() => {
-      expect(screen.getAllByText('sku').length).toBeGreaterThan(0);
-    });
-
-    // Verify we can actually open the select and find 'sku' as an option
-    await user.click(screen.getByPlaceholderText('Выбрать столбец артикула'));
-    expect(await screen.findByRole('option', { name: 'sku' })).toBeInTheDocument();
-  });
-
   // ── Slice 6: file drop → POST upload → filename appears ──────────────────────
 
-  it('dropping a file POSTs to /api/supplier-feed/feeds/:id/upload/ and shows filename', async () => {
+  it('dropping a file POSTs to /api/suppliers/feeds/:id/upload/ and shows filename', async () => {
     server.use(
-      http.post('/api/supplier-feed/feeds/42/upload/', () =>
+      http.post('/api/suppliers/feeds/42/upload/', () =>
         HttpResponse.json(FEED_FILE, { status: 201 }),
       ),
     );
@@ -388,7 +256,7 @@ describe('FeedNewPage', () => {
 
   it('"Обработать" is disabled when file list is empty and enabled after upload', async () => {
     server.use(
-      http.post('/api/supplier-feed/feeds/42/upload/', () =>
+      http.post('/api/suppliers/feeds/42/upload/', () =>
         HttpResponse.json(FEED_FILE, { status: 201 }),
       ),
     );
@@ -415,12 +283,12 @@ describe('FeedNewPage', () => {
 
   // ── Slice 8: "Обработать" calls process + navigates to detail page ───────────
 
-  it('"Обработать" POSTs /api/supplier-feed/feeds/:id/process/ and navigates to detail', async () => {
+  it('"Обработать" POSTs /api/suppliers/feeds/:id/process/ and navigates to detail', async () => {
     server.use(
-      http.post('/api/supplier-feed/feeds/42/upload/', () =>
+      http.post('/api/suppliers/feeds/42/upload/', () =>
         HttpResponse.json(FEED_FILE, { status: 201 }),
       ),
-      http.post('/api/supplier-feed/feeds/42/process/', () =>
+      http.post('/api/suppliers/feeds/42/process/', () =>
         HttpResponse.json({ ...FEED, status: 'processing' }),
       ),
     );

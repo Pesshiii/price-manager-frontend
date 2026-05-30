@@ -18,12 +18,11 @@ const SUPPLIER = { id: 1, name: 'ООО Ромашка' };
 const FEED_DRAFT = {
   id: 42,
   supplier: 1,
-  feed_mapping: null,
+  mapping: null,
   status: 'draft',
-  total: 0,
-  matched: 0,
-  queued: 0,
-  skipped: 0,
+  total_rows: 0,
+  matched_rows: 0,
+  unmatched_rows: 0,
   error: null,
   created_at: '2026-05-01T10:00:00Z',
   updated_at: '2026-05-01T10:00:00Z',
@@ -37,8 +36,8 @@ const FEED_PROCESSING = {
 
 function baseHandlers(feeds = [FEED_DRAFT]) {
   return [
-    http.get('/api/supplier-feed/feeds/', () => HttpResponse.json(feeds)),
-    http.get('/api/suppliers/', () => HttpResponse.json([SUPPLIER])),
+    http.get('/api/suppliers/feeds/', () => HttpResponse.json(feeds)),
+    http.get('/api/suppliers/suppliers/', () => HttpResponse.json([SUPPLIER])),
   ];
 }
 
@@ -74,7 +73,7 @@ describe('FeedsPage', () => {
 
   it('shows Russian status label in badge for each status', async () => {
     server.use(
-      http.get('/api/supplier-feed/feeds/', () =>
+      http.get('/api/suppliers/feeds/', () =>
         HttpResponse.json([
           { ...FEED_DRAFT, status: 'processing' },
           { ...FEED_DRAFT, id: 43, status: 'error' },
@@ -163,7 +162,7 @@ describe('FeedsPage', () => {
 
   it('delete button is visible for draft feeds and hidden for non-draft', async () => {
     server.use(
-      http.get('/api/supplier-feed/feeds/', () =>
+      http.get('/api/suppliers/feeds/', () =>
         HttpResponse.json([FEED_DRAFT, FEED_PROCESSING]),
       ),
     );
@@ -179,18 +178,18 @@ describe('FeedsPage', () => {
     expect(deleteButtons).toHaveLength(1);
   });
 
-  it('confirming delete calls DELETE /supplier-feed/feeds/:id/ and removes the row', async () => {
+  it('confirming delete calls DELETE /feeds/:id/ and removes the row', async () => {
     const user = userEvent.setup();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     let deleteCalled = false;
     server.use(
-      http.delete('/api/supplier-feed/feeds/42/', () => {
+      http.delete('/api/suppliers/feeds/42/', () => {
         deleteCalled = true;
         return new HttpResponse(null, { status: 204 });
       }),
       // After delete, refetch returns empty list
-      http.get('/api/supplier-feed/feeds/', () =>
+      http.get('/api/suppliers/feeds/', () =>
         deleteCalled ? HttpResponse.json([]) : HttpResponse.json([FEED_DRAFT]),
       ),
     );

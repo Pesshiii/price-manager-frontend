@@ -26,7 +26,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Главная', icon: IconDashboard },
   {
-    to: '/suppliers',
+    to: '/suppliers/feeds',
     label: 'Поставщики',
     icon: IconBuildingWarehouse,
     children: [
