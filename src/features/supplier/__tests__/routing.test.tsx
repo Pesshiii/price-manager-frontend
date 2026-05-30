@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { render } from '@testing-library/react';
 import { MantineProvider } from '@mantine/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -39,6 +39,7 @@ function renderAt(path: string, element: React.ReactElement) {
 // These render individual page components under test paths; they verify
 // the correct page is reachable, independent of RequireAuth.
 
+import { SuppliersPage } from '../pages/SuppliersPage';
 import { FeedsPage } from '../pages/FeedsPage';
 import { FeedNewPage } from '../pages/FeedNewPage';
 import { FeedDetailPage } from '../pages/FeedDetailPage';
@@ -55,17 +56,18 @@ describe('supplier routing', () => {
     expect(screen.getByText(/выгрузки/i)).toBeInTheDocument();
   });
 
-  it('redirects /suppliers to /suppliers/feeds', () => {
+  it('SuppliersPage renders at /suppliers', async () => {
+    server.use(
+      http.get('/api/suppliers/', () => HttpResponse.json([])),
+    );
     renderAt('/suppliers', (
       <Routes>
         <Route path="/suppliers">
-          <Route index element={<Navigate to="feeds" replace />} />
-          <Route path="feeds" element={<FeedsPage />} />
+          <Route index element={<SuppliersPage />} />
         </Route>
       </Routes>
     ));
-    // After redirect the FeedsPage headline is visible
-    expect(screen.getByText(/выгрузки/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /поставщики/i })).toBeInTheDocument();
   });
 
   it('FeedNewPage renders at /suppliers/feeds/new', () => {
@@ -79,15 +81,17 @@ describe('supplier routing', () => {
 
   it('FeedDetailPage renders at /suppliers/feeds/:id with the id', async () => {
     server.use(
-      http.get('/api/suppliers/feeds/42/', () =>
+      http.get('/api/supplier-feed/feeds/42/', () =>
         HttpResponse.json({
-          id: 42, supplier: 1, mapping: null, status: 'matched',
-          total_rows: 0, matched_rows: 0, unmatched_rows: 0,
+          id: 42, supplier: 1, feed_mapping: null, status: 'matched',
+          total: 0, matched: 0, queued: 0, skipped: 0,
           error: null, created_at: '2026-05-26T10:00:00Z', updated_at: '2026-05-26T10:00:00Z',
         }),
       ),
-      http.get('/api/suppliers/suppliers/', () => HttpResponse.json([])),
-      http.get('/api/suppliers/feeds/42/queue/', () => HttpResponse.json([])),
+      http.get('/api/suppliers/', () => HttpResponse.json([])),
+      http.get('/api/supplier-feed/feeds/42/queue/', () =>
+        HttpResponse.json({ count: 0, next: null, results: [] }),
+      ),
     );
     renderAt('/suppliers/feeds/42', (
       <Routes>

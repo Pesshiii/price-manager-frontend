@@ -49,20 +49,20 @@ export type SupplierFeedStatus =
   | 'done'
   | 'error';
 
-export interface SupplierFeed {
+export interface SupplierFeedSummary {
   id: number;
   supplier: number;
-  /** FK to FeedMapping used for this session */
-  mapping: number | null;
+  feed_mapping: number | null;
   status: SupplierFeedStatus;
-  /** Number of entries in the file */
-  total_rows: number;
-  /** Entries successfully auto-matched */
-  matched_rows: number;
-  /** Entries still in the MatchQueue */
-  unmatched_rows: number;
   error: string | null;
   created_at: string;
+}
+
+export interface SupplierFeedDetail extends SupplierFeedSummary {
+  total: number;
+  matched: number;
+  queued: number;
+  skipped: number;
   updated_at: string;
 }
 
@@ -73,7 +73,8 @@ export interface SupplierFeed {
 export interface MatchCandidate {
   product_id: number;
   score: number;
-  name: string;
+  /** Catalogue SKU of the candidate product */
+  sku: string;
 }
 
 /**
@@ -102,7 +103,8 @@ export type MatchQueueEntry = SupplierFeedEntry & { product: null; skipped: fals
 // ---------------------------------------------------------------------------
 
 export interface FeedFile {
-  id: number;
+  /** Dataframe session ID — used as the identifier for deletion */
+  session_id: string;
   filename: string;
   size: number;
   uploaded_at: string;
@@ -114,14 +116,8 @@ export interface FeedFile {
 
 export interface SupplierLink {
   id: number;
-  supplier: number;
-  /** The supplier's own article/SKU identifier */
+  supplier: { id: number; name: string };
   supplier_sku: string;
-  /** FK to our catalogue Product */
-  product: number;
-  /** Denormalized display name from the catalogue (may be absent on older records) */
-  product_name?: string;
-  /** Internal catalogue SKU (may be absent on older records) */
-  product_sku?: string;
+  product: { id: number; name: string; sku: string };
   created_at: string;
 }

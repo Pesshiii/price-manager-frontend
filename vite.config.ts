@@ -31,6 +31,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    exclude: ['node_modules', '.claude/**'],
     env: {
       VITE_API_BASE_URL: '/api',
     },

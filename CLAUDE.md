@@ -152,10 +152,18 @@ The "Проверить" button on the mapping step is disabled if any dynamic g
 
 - Mantine 7 sub-package styles are imported in `main.tsx` (`@mantine/core`, `@mantine/notifications`, `@mantine/dropzone`). Adding a new Mantine sub-package requires importing its CSS there too.
 - UI strings are in Russian (see route placeholders in `src/routes.tsx`).
+- API layout is stored in `../price_manager/API_MAP.md` file
 
-## Agent Tools
+## Agent skills
 
-### Handoff
+### Issue tracker
 
-Handoff documents are saved to the temporary directory of the user's OS - not the current workspace.
+Issues live in GitHub Issues (`github.com/Pesshiii/price-manager-frontend`). See `docs/agents/issue-tracker.md`.
 
+### Triage labels
+
+Default five-role vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context repo — one `CONTEXT.md` + `docs/adr/` at the root. See `docs/agents/domain.md`.

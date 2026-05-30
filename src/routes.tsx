@@ -12,6 +12,8 @@ import { CategoriesPage } from '@/features/product/pages/CategoriesPage';
 import { BrandsPage } from '@/features/product/pages/BrandsPage';
 import { CharacteristicTypesPage } from '@/features/product/pages/CharacteristicTypesPage';
 import { ImportPage } from '@/features/product/pages/ImportPage';
+import { SuppliersPage } from '@/features/supplier/pages/SuppliersPage';
+import { SupplierDetailPage } from '@/features/supplier/pages/SupplierDetailPage';
 import { FeedsPage } from '@/features/supplier/pages/FeedsPage';
 import { FeedNewPage } from '@/features/supplier/pages/FeedNewPage';
 import { FeedDetailPage } from '@/features/supplier/pages/FeedDetailPage';
@@ -37,7 +39,8 @@ export const routeConfig: RouteObject[] = [
       {
         path: 'suppliers',
         children: [
-          { index: true, element: <Navigate to="feeds" replace /> },
+          { index: true, element: <SuppliersPage /> },
+          { path: ':id', element: <SupplierDetailPage /> },
           { path: 'feeds', element: <FeedsPage /> },
           { path: 'feeds/new', element: <FeedNewPage /> },
           { path: 'feeds/:id', element: <FeedDetailPage /> },
