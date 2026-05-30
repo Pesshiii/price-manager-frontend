@@ -12,11 +12,11 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
-import { useDebouncedValue, useDisclosure } from '@mantine/hooks';
+import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { createCharacteristicType } from '../../api';
 import { useCharacteristicTypes } from '../../hooks/useCharacteristicTypes';
 import { charTypeKeys } from '../../queryKeys';
@@ -65,134 +65,6 @@ function getColumn(value: FieldMapping | undefined): string | null {
   return null;
 }
 
-// Stable per-row id so dynamic rows survive parent re-renders without
-// remount, and React.memo can short-circuit unrelated rows.
-let _rowSeq = 0;
-function nextRowId() {
-  _rowSeq += 1;
-  return `dr-${_rowSeq}`;
-}
-
-interface DynamicRow extends DynamicCharSpec {
-  __rowId: string;
-}
-
-interface DynamicCharRowProps {
-  rowId: string;
-  index: number;
-  spec: DynamicCharSpec;
-  columns: string[];
-  onPatch: (rowId: string, patch: Partial<DynamicCharSpec>) => void;
-  onRemove: (rowId: string) => void;
-}
-
-const DynamicCharRow = memo(function DynamicCharRow({
-  rowId,
-  index,
-  spec,
-  columns,
-  onPatch,
-  onRemove,
-}: DynamicCharRowProps) {
-  return (
-    <Table.Tr data-testid={`dynamic-row-${index}`}>
-      <Table.Td>
-        <Select
-          placeholder="Имя из колонки"
-          aria-label={`Имя из колонки (группа ${index + 1})`}
-          data={columns}
-          value={spec.name_column || null}
-          onChange={(v) => onPatch(rowId, { name_column: v ?? '' })}
-          clearable
-        />
-      </Table.Td>
-      <Table.Td>
-        <Select
-          placeholder="Значение из колонки"
-          aria-label={`Значение из колонки (группа ${index + 1})`}
-          data={columns}
-          value={spec.value_column || null}
-          onChange={(v) => onPatch(rowId, { value_column: v ?? '' })}
-          clearable
-        />
-      </Table.Td>
-      <Table.Td>
-        <Select
-          placeholder="Единица из колонки"
-          aria-label={`Единица из колонки (группа ${index + 1})`}
-          data={columns}
-          value={spec.unit_column || null}
-          onChange={(v) => onPatch(rowId, { unit_column: v ?? undefined })}
-          clearable
-        />
-      </Table.Td>
-      <Table.Td>
-        <Button
-          variant="subtle"
-          color="red"
-          size="xs"
-          aria-label={`Удалить группу ${index + 1}`}
-          onClick={() => onRemove(rowId)}
-        >
-          <IconTrash size={14} />
-        </Button>
-      </Table.Td>
-    </Table.Tr>
-  );
-});
-
-interface BoundCharRowProps {
-  name: string;
-  type: CharacteristicType | undefined;
-  columns: string[];
-  column: string | null;
-  onSelect: (name: string, column: string | null) => void;
-}
-
-const BoundCharRow = memo(function BoundCharRow({
-  name,
-  type,
-  columns,
-  column,
-  onSelect,
-}: BoundCharRowProps) {
-  return (
-    <Table.Tr>
-      <Table.Td>
-        <Text>
-          {type?.label ?? name}
-          {type?.required ? ' *' : ''}
-        </Text>
-      </Table.Td>
-      <Table.Td>
-        <Select
-          placeholder="—"
-          data={columns}
-          value={column}
-          onChange={(v) => onSelect(name, v)}
-          clearable
-        />
-      </Table.Td>
-      <Table.Td>
-        <Text c={type?.unit ? undefined : 'dimmed'} size="sm">
-          {type?.unit || '—'}
-        </Text>
-      </Table.Td>
-      <Table.Td>
-        <Button
-          variant="subtle"
-          color="red"
-          size="xs"
-          aria-label={`Отвязать ${type?.label ?? name}`}
-          onClick={() => onSelect(name, null)}
-        >
-          <IconTrash size={14} />
-        </Button>
-      </Table.Td>
-    </Table.Tr>
-  );
-});
-
 export function ImportMappingStep({
   columns,
   characteristicTypes,
@@ -210,36 +82,6 @@ export function ImportMappingStep({
     required: false,
   });
   const [pickerQuery, setPickerQuery] = useState('');
-  // Debounce so each keystroke doesn't refetch picker results and shake the
-  // memoized BoundCharRow tree.
-  const [debouncedPickerQuery] = useDebouncedValue(pickerQuery, 250);
-
-  // Refs let the action callbacks below stay identity-stable (deps: []) so
-  // React.memo on DynamicCharRow / BoundCharRow actually short-circuits when
-  // sibling rows are unchanged. Without this, every `mapping` update produced
-  // new callback identities and re-rendered all ~50 rows.
-  const mappingRef = useRef(mapping);
-  const onChangeRef = useRef(onChange);
-  useEffect(() => {
-    mappingRef.current = mapping;
-    onChangeRef.current = onChange;
-  });
-
-  // Keep stable __rowId per dynamic spec across renders. The mapping prop is
-  // the source of truth for spec content; this ref only tracks identity.
-  const rowIdsRef = useRef<string[]>([]);
-  const incomingDynamic = mapping.dynamic_characteristics ?? [];
-  // Sync row ids during render (cheap, idempotent) — moving this into an
-  // effect would render one frame with mismatched keys and remount children.
-  if (rowIdsRef.current.length !== incomingDynamic.length) {
-    const next = rowIdsRef.current.slice(0, incomingDynamic.length);
-    while (next.length < incomingDynamic.length) next.push(nextRowId());
-    rowIdsRef.current = next;
-  }
-  const dynamicRows: DynamicRow[] = incomingDynamic.map((spec, i) => ({
-    ...spec,
-    __rowId: rowIdsRef.current[i],
-  }));
 
   const createMutation = useMutation({
     mutationFn: createCharacteristicType,
@@ -250,11 +92,10 @@ export function ImportMappingStep({
         color: 'green',
       });
       // Bind the newly-created type automatically so the user can pick a column.
-      const current = mappingRef.current;
-      const chars = { ...(current.characteristics ?? {}) };
+      const chars = { ...(mapping.characteristics ?? {}) };
       if (!chars[created.name]) {
         chars[created.name] = { column: '' };
-        onChangeRef.current({ ...current, characteristics: chars });
+        onChange({ ...mapping, characteristics: chars });
       }
       closeModal();
       setForm({ name: '', label: '', value_type: 'string', options: [], unit: '', required: false });
@@ -269,82 +110,69 @@ export function ImportMappingStep({
   });
 
   // Search picker: paginated, bounded result set. Fires only when user types.
-  const pickerEnabled = debouncedPickerQuery.trim().length > 0;
+  const pickerEnabled = pickerQuery.trim().length > 0;
   const pickerQ = useCharacteristicTypes(
-    pickerEnabled ? { search: debouncedPickerQuery.trim(), page_size: 20 } : {},
+    pickerEnabled ? { search: pickerQuery.trim(), page_size: 20 } : {},
   );
   const pickerResults = pickerEnabled ? pickerQ.data?.results ?? [] : [];
 
-  // Split: bound rows only need the stable type list. Picker results live in
-  // a separate map and don't invalidate BoundCharRow on every keystroke.
-  const boundTypeIndex = useMemo(() => {
+  const charTypeIndex = useMemo(() => {
     const m = new Map<string, CharacteristicType>();
     for (const t of characteristicTypes) m.set(t.name, t);
+    for (const t of pickerResults) m.set(t.name, t);
     return m;
-  }, [characteristicTypes]);
+  }, [characteristicTypes, pickerResults]);
 
-  const setField = useCallback((key: keyof ImportMapping, column: string | null) => {
-    const next: ImportMapping = { ...mappingRef.current };
+  const setField = (key: keyof ImportMapping, column: string | null) => {
+    const next: ImportMapping = { ...mapping };
     if (column) {
       (next[key] as FieldMapping) = { column };
     } else {
       delete next[key];
     }
-    onChangeRef.current(next);
-  }, []);
+    onChange(next);
+  };
 
-  const setCharacteristic = useCallback((name: string, column: string | null) => {
-    const current = mappingRef.current;
-    const chars = { ...(current.characteristics ?? {}) };
+  const setCharacteristic = (name: string, column: string | null) => {
+    const chars = { ...(mapping.characteristics ?? {}) };
     if (column) {
       chars[name] = { column };
     } else {
       delete chars[name];
     }
-    onChangeRef.current({ ...current, characteristics: chars });
-  }, []);
+    onChange({ ...mapping, characteristics: chars });
+  };
 
-  const bindNewCharacteristic = useCallback((name: string) => {
+  const bindNewCharacteristic = (name: string) => {
     if (!name) return;
-    const current = mappingRef.current;
-    const chars = { ...(current.characteristics ?? {}) };
+    const chars = { ...(mapping.characteristics ?? {}) };
     if (!chars[name]) chars[name] = { column: '' };
-    onChangeRef.current({ ...current, characteristics: chars });
-  }, []);
+    onChange({ ...mapping, characteristics: chars });
+  };
 
-  const patchDynamic = useCallback((rowId: string, patch: Partial<DynamicCharSpec>) => {
-    const idx = rowIdsRef.current.indexOf(rowId);
-    if (idx < 0) return;
-    const current = mappingRef.current;
-    const list = current.dynamic_characteristics ?? [];
-    const next = list.map((spec, i) => (i === idx ? { ...spec, ...patch } : spec));
-    onChangeRef.current({ ...current, dynamic_characteristics: next });
-  }, []);
+  const dynamicSpecs: DynamicCharSpec[] = mapping.dynamic_characteristics ?? [];
 
-  const removeDynamic = useCallback((rowId: string) => {
-    const idx = rowIdsRef.current.indexOf(rowId);
-    if (idx < 0) return;
-    const current = mappingRef.current;
-    const list = current.dynamic_characteristics ?? [];
-    const next = list.filter((_, i) => i !== idx);
-    rowIdsRef.current = rowIdsRef.current.filter((_, i) => i !== idx);
+  const updateDynamic = (idx: number, patch: Partial<DynamicCharSpec>) => {
+    const next = dynamicSpecs.map((spec, i) => (i === idx ? { ...spec, ...patch } : spec));
+    onChange({ ...mapping, dynamic_characteristics: next });
+  };
+
+  const removeDynamic = (idx: number) => {
+    const next = dynamicSpecs.filter((_, i) => i !== idx);
     if (next.length === 0) {
-      const { dynamic_characteristics: _drop, ...rest } = current;
-      onChangeRef.current(rest);
+      const { dynamic_characteristics: _drop, ...rest } = mapping;
+      onChange(rest);
     } else {
-      onChangeRef.current({ ...current, dynamic_characteristics: next });
+      onChange({ ...mapping, dynamic_characteristics: next });
     }
-  }, []);
+  };
 
-  const addDynamic = useCallback(() => {
-    const current = mappingRef.current;
-    const list = current.dynamic_characteristics ?? [];
-    rowIdsRef.current = [...rowIdsRef.current, nextRowId()];
-    onChangeRef.current({
-      ...current,
-      dynamic_characteristics: [...list, { name_column: '', value_column: '' }],
+  const addDynamic = () => {
+    onChange({
+      ...mapping,
+      dynamic_characteristics: [...dynamicSpecs, { name_column: '', value_column: '' }],
     });
-  }, []);
+  };
 
   const canSubmit =
     form.name.trim().length > 0 &&
@@ -431,7 +259,7 @@ export function ImportMappingStep({
         }}
         limit={20}
       />
-      {boundNames.length === 0 && dynamicRows.length === 0 ? (
+      {boundNames.length === 0 && dynamicSpecs.length === 0 ? (
         <Text c="dimmed" size="sm">
           Пока не привязано ни одной характеристики. Используйте поле выше, чтобы
           добавить нужные, или «Добавить вариант» для EAV-лайаута.
@@ -447,26 +275,94 @@ export function ImportMappingStep({
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {boundNames.map((name) => (
-              <BoundCharRow
-                key={`bound-${name}`}
-                name={name}
-                type={boundTypeIndex.get(name)}
-                columns={columns}
-                column={getColumn(mapping.characteristics?.[name])}
-                onSelect={setCharacteristic}
-              />
-            ))}
-            {dynamicRows.map((row, idx) => (
-              <DynamicCharRow
-                key={row.__rowId}
-                rowId={row.__rowId}
-                index={idx}
-                spec={row}
-                columns={columns}
-                onPatch={patchDynamic}
-                onRemove={removeDynamic}
-              />
+            {boundNames.map((name) => {
+              const type = charTypeIndex.get(name);
+              return (
+                <Table.Tr key={`bound-${name}`}>
+                  <Table.Td>
+                    <Text>
+                      {type?.label ?? name}
+                      {type?.required ? ' *' : ''}
+                    </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Select
+                      placeholder="—"
+                      data={columns}
+                      value={getColumn(mapping.characteristics?.[name])}
+                      onChange={(v) => setCharacteristic(name, v)}
+                      clearable
+                      searchable
+                    />
+                  </Table.Td>
+                  <Table.Td>
+                    <Text c={type?.unit ? undefined : 'dimmed'} size="sm">
+                      {type?.unit || '—'}
+                    </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <Button
+                      variant="subtle"
+                      color="red"
+                      size="xs"
+                      aria-label={`Отвязать ${type?.label ?? name}`}
+                      onClick={() => setCharacteristic(name, null)}
+                    >
+                      <IconTrash size={14} />
+                    </Button>
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
+            {dynamicSpecs.map((spec, idx) => (
+              <Table.Tr key={`dynamic-${idx}`} data-testid={`dynamic-row-${idx}`}>
+                <Table.Td>
+                  <Select
+                    placeholder="Имя из колонки"
+                    aria-label={`Имя из колонки (группа ${idx + 1})`}
+                    data={columns}
+                    value={spec.name_column || null}
+                    onChange={(v) => updateDynamic(idx, { name_column: v ?? '' })}
+                    clearable
+                    searchable
+                  />
+                </Table.Td>
+                <Table.Td>
+                  <Select
+                    placeholder="Значение из колонки"
+                    aria-label={`Значение из колонки (группа ${idx + 1})`}
+                    data={columns}
+                    value={spec.value_column || null}
+                    onChange={(v) => updateDynamic(idx, { value_column: v ?? '' })}
+                    clearable
+                    searchable
+                  />
+                </Table.Td>
+                <Table.Td>
+                  <Select
+                    placeholder="Единица из колонки"
+                    aria-label={`Единица из колонки (группа ${idx + 1})`}
+                    data={columns}
+                    value={spec.unit_column || null}
+                    onChange={(v) =>
+                      updateDynamic(idx, { unit_column: v ?? undefined })
+                    }
+                    clearable
+                    searchable
+                  />
+                </Table.Td>
+                <Table.Td>
+                  <Button
+                    variant="subtle"
+                    color="red"
+                    size="xs"
+                    aria-label={`Удалить группу ${idx + 1}`}
+                    onClick={() => removeDynamic(idx)}
+                  >
+                    <IconTrash size={14} />
+                  </Button>
+                </Table.Td>
+              </Table.Tr>
             ))}
           </Table.Tbody>
         </Table>
