@@ -153,9 +153,3 @@ The "Проверить" button on the mapping step is disabled if any dynamic g
 - Mantine 7 sub-package styles are imported in `main.tsx` (`@mantine/core`, `@mantine/notifications`, `@mantine/dropzone`). Adding a new Mantine sub-package requires importing its CSS there too.
 - UI strings are in Russian (see route placeholders in `src/routes.tsx`).
 
-## Agent Tools
-
-### Handoff
-
-Handoff documents are saved to the temporary directory of the user's OS - not the current workspace.
-

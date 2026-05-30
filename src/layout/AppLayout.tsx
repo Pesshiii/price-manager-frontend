@@ -25,16 +25,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Главная', icon: IconDashboard },
-  {
-    to: '/suppliers/feeds',
-    label: 'Поставщики',
-    icon: IconBuildingWarehouse,
-    children: [
-      { to: '/suppliers/feeds', label: 'Выгрузки', icon: IconBuildingWarehouse },
-      { to: '/suppliers/mappings', label: 'Конфигурации', icon: IconListDetails },
-      { to: '/suppliers/links', label: 'Связи', icon: IconTag },
-    ],
-  },
+  { to: '/suppliers', label: 'Поставщики', icon: IconBuildingWarehouse },
   { to: '/products', label: 'Продукты', icon: IconPackages },
   // Reference data behind the product catalog — own group so the Products
   // link stays a single-click destination instead of an expandable parent.
