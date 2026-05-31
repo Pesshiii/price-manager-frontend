@@ -16,13 +16,13 @@ interface Props {
   onReset: () => void;
 }
 
-const ACCEPTED = [
-  'text/csv',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'text/tab-separated-values',
-  'text/plain',
-];
+const ACCEPTED = {
+  'text/csv': ['.csv'],
+  'application/vnd.ms-excel': ['.xls'],
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+  'text/tab-separated-values': ['.tsv'],
+  'text/plain': ['.txt'],
+};
 
 export function SourcePicker({ sessionId, uploadedFile, onUploaded, onReset }: Props) {
   const [uploading, setUploading] = useState(false);
