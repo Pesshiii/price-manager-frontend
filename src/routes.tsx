@@ -12,6 +12,7 @@ import { CategoriesPage } from '@/features/product/pages/CategoriesPage';
 import { BrandsPage } from '@/features/product/pages/BrandsPage';
 import { CharacteristicTypesPage } from '@/features/product/pages/CharacteristicTypesPage';
 import { ImportPage } from '@/features/product/pages/ImportPage';
+import { SuppliersPage } from '@/features/supplier/pages/SuppliersPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -24,7 +25,7 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <DashboardPage /> },
-      { path: 'suppliers', element: <PlaceholderPage title="Поставщики" /> },
+      { path: 'suppliers', element: <SuppliersPage /> },
       { path: 'products', element: <ProductListPage /> },
       { path: 'products/new', element: <ProductEditorPage /> },
       { path: 'products/import', element: <ImportPage /> },
