@@ -37,7 +37,7 @@ React Router v6 `createBrowserRouter`. The root path is wrapped in `RequireAuth`
 ## API map
 ### Endpoints
 
-**ALWAYS** consult `./price_manager/API_MAP.md` treat it as the single source of true api
+**ALWAYS** consult `../price_manager/API_MAP.md` treat it as the single source of true api
 
 ### Characteristic type CRUD + safe mutation flow
 

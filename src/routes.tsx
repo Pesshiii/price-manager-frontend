@@ -13,6 +13,12 @@ import { BrandsPage } from '@/features/product/pages/BrandsPage';
 import { CharacteristicTypesPage } from '@/features/product/pages/CharacteristicTypesPage';
 import { ImportPage } from '@/features/product/pages/ImportPage';
 import { SuppliersPage } from '@/features/supplier/pages/SuppliersPage';
+import { SupplierDetailPage } from '@/features/supplier/pages/SupplierDetailPage';
+import { FeedMappingCreatePage } from '@/features/supplier/pages/FeedMappingCreatePage';
+import { FeedMappingEditPage } from '@/features/supplier/pages/FeedMappingEditPage';
+import { SupplierFeedPage } from '@/features/supplier/pages/SupplierFeedPage';
+import { FeedQueuePage } from '@/features/supplier/pages/FeedQueuePage';
+import { SupplierLinksPage } from '@/features/supplier/pages/SupplierLinksPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -26,6 +32,12 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <DashboardPage /> },
       { path: 'suppliers', element: <SuppliersPage /> },
+      { path: 'suppliers/:id', element: <SupplierDetailPage /> },
+      { path: 'suppliers/:id/mappings/new', element: <FeedMappingCreatePage /> },
+      { path: 'suppliers/:id/mappings/:mappingId/edit', element: <FeedMappingEditPage /> },
+      { path: 'suppliers/:id/feeds/:feedId', element: <SupplierFeedPage /> },
+      { path: 'suppliers/:id/feeds/:feedId/queue', element: <FeedQueuePage /> },
+      { path: 'suppliers/:id/links', element: <SupplierLinksPage /> },
       { path: 'products', element: <ProductListPage /> },
       { path: 'products/new', element: <ProductEditorPage /> },
       { path: 'products/import', element: <ImportPage /> },

@@ -7,6 +7,7 @@ import {
   Modal,
   Stack,
   Table,
+  Text,
   TextInput,
   Title,
 } from '@mantine/core';
@@ -15,6 +16,7 @@ import { notifications } from '@mantine/notifications';
 import { IconEdit, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { createSupplier, deleteSupplier, listSuppliers, updateSupplier } from '../api';
 import { supplierKeys } from '../queryKeys';
 import type { Supplier } from '../types';
@@ -103,7 +105,11 @@ export function SuppliersPage() {
             <Table.Tbody>
               {(data ?? []).map((s) => (
                 <Table.Tr key={s.id}>
-                  <Table.Td>{s.name}</Table.Td>
+                  <Table.Td>
+                    <Text component={Link} to={`/suppliers/${s.id}`} fw={500}>
+                      {s.name}
+                    </Text>
+                  </Table.Td>
                   <Table.Td>
                     <Group justify="flex-end" gap="xs">
                       <ActionIcon
