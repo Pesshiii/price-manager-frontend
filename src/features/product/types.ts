@@ -162,6 +162,10 @@ export type FacetsResponse = Record<string, FacetGroupData>;
 
 export type FieldMapping = { column: string } | { const: unknown };
 
+export type CategoryFieldMapping =
+  | { column: string; separator?: string; create_missing?: boolean }
+  | { const: unknown };
+
 /**
  * EAV-style "dynamic" characteristic mapping: name/value/unit each bound to
  * a source column. Per row the worker reads those cells, slugifies the name
@@ -176,7 +180,7 @@ export interface DynamicCharSpec {
 export interface ImportMapping {
   sku?: FieldMapping;
   name?: FieldMapping;
-  category?: FieldMapping;
+  category?: CategoryFieldMapping;
   brand?: FieldMapping;
   description?: FieldMapping;
   status?: FieldMapping;
@@ -224,6 +228,44 @@ export interface ImportRequestBody {
   instructions: unknown;
   mapping: ImportMapping;
   row_limit?: number;
+}
+
+export interface CategoryImportMapping {
+  path_column: string;
+  separator?: string;
+}
+
+export interface CategoryImportRequestBody {
+  session_id: string;
+  instructions: unknown;
+  mapping: CategoryImportMapping;
+  row_limit?: number;
+}
+
+export type CategoryRowStatus = 'new' | 'exists' | 'invalid';
+
+export interface CategoryImportPreviewRow {
+  index: number;
+  path: string;
+  segments: string[];
+  status: CategoryRowStatus;
+  error?: string;
+}
+
+export interface CategoryImportPreviewResult {
+  rows: CategoryImportPreviewRow[];
+  total: number;
+  returned: number;
+  new: number;
+  exists: number;
+  invalid: number;
+}
+
+export interface CategoryImportCommitResult {
+  created: number;
+  skipped: number;
+  invalid: number;
+  errors: Array<{ index: number; path: string; error: string }>;
 }
 
 export type ImportJobStatus = 'pending' | 'running' | 'success' | 'error';

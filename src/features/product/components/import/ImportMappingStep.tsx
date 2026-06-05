@@ -21,6 +21,7 @@ import { createCharacteristicType } from '../../api';
 import { useCharacteristicTypes } from '../../hooks/useCharacteristicTypes';
 import { charTypeKeys } from '../../queryKeys';
 import type {
+  CategoryFieldMapping,
   CharacteristicType,
   DynamicCharSpec,
   FieldMapping,
@@ -61,6 +62,11 @@ export interface ImportMappingStepProps {
 }
 
 function getColumn(value: FieldMapping | undefined): string | null {
+  if (value && 'column' in value) return value.column;
+  return null;
+}
+
+function getCategoryColumn(value: CategoryFieldMapping | undefined): string | null {
   if (value && 'column' in value) return value.column;
   return null;
 }
@@ -131,6 +137,30 @@ export function ImportMappingStep({
       delete next[key];
     }
     onChange(next);
+  };
+
+  const setCategoryColumn = (column: string | null) => {
+    if (!column) {
+      const { category: _drop, ...rest } = mapping;
+      onChange(rest);
+      return;
+    }
+    const prev = mapping.category;
+    const prevCol = prev && 'column' in prev ? prev : undefined;
+    onChange({
+      ...mapping,
+      category: {
+        column,
+        ...(prevCol?.separator !== undefined ? { separator: prevCol.separator } : {}),
+        ...(prevCol?.create_missing !== undefined ? { create_missing: prevCol.create_missing } : {}),
+      },
+    });
+  };
+
+  const setCategoryOption = (patch: Partial<{ separator: string; create_missing: boolean }>) => {
+    const cat = mapping.category;
+    if (!cat || !('column' in cat)) return;
+    onChange({ ...mapping, category: { ...cat, ...patch } });
   };
 
   const setCharacteristic = (name: string, column: string | null) => {
@@ -207,14 +237,60 @@ export function ImportMappingStep({
                 </Text>
               </Table.Td>
               <Table.Td>
-                <Select
-                  placeholder="—"
-                  data={columns}
-                  value={getColumn(mapping[field.key] as FieldMapping | undefined)}
-                  onChange={(v) => setField(field.key, v)}
-                  clearable
-                  searchable
-                />
+                {field.key === 'category' ? (
+                  <Stack gap="xs">
+                    <Select
+                      placeholder="—"
+                      data={columns}
+                      value={getCategoryColumn(mapping.category)}
+                      onChange={setCategoryColumn}
+                      clearable
+                      searchable
+                    />
+                    {getCategoryColumn(mapping.category) && (
+                      <Group gap="sm" align="flex-end">
+                        <TextInput
+                          size="xs"
+                          label="Разделитель"
+                          placeholder=">"
+                          value={
+                            mapping.category && 'column' in mapping.category
+                              ? (mapping.category.separator ?? '')
+                              : ''
+                          }
+                          onChange={(e) =>
+                            setCategoryOption({
+                              separator: e.currentTarget.value || undefined,
+                            })
+                          }
+                          style={{ width: 120 }}
+                        />
+                        <Switch
+                          size="sm"
+                          label="Создавать отсутствующие"
+                          checked={
+                            mapping.category && 'column' in mapping.category
+                              ? (mapping.category.create_missing ?? false)
+                              : false
+                          }
+                          onChange={(e) =>
+                            setCategoryOption({ create_missing: e.currentTarget.checked })
+                          }
+                          mb={4}
+                        />
+                      </Group>
+                    )}
+                  </Stack>
+                ) : (
+                  <Select
+                    placeholder="—"
+                    data={columns}
+                    value={getColumn(mapping[field.key] as FieldMapping | undefined)}
+                    onChange={(v) => setField(field.key, v)}
+                    clearable
+                    searchable
+                  />
+                )}
               </Table.Td>
             </Table.Tr>
           ))}

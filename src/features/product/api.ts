@@ -2,6 +2,7 @@ import { api } from '@/api/client';
 import type {
   Brand,
   Category,
+  CategoryImportRequestBody,
   CharacteristicType,
   CharMutationJob,
   FacetsResponse,
@@ -288,5 +289,90 @@ export async function getCharMutationJob(jobId: string): Promise<CharMutationJob
   const { data } = await api.get<CharMutationJob>(
     `${BASE}/characteristic-types/jobs/${jobId}/`,
   );
+  return data;
+}
+
+export async function getCategory(id: number): Promise<Category> {
+  const { data } = await api.get<Category>(`${BASE}/categories/${id}/`);
+  return data;
+}
+
+export async function getCategoryCharTypes(
+  categoryId: number,
+): Promise<Paginated<CharacteristicType>> {
+  const { data } = await api.get<Paginated<CharacteristicType>>(
+    `${BASE}/characteristic-types/`,
+    { params: { category: categoryId } },
+  );
+  return data;
+}
+
+export async function addCategoryCharType(
+  categoryId: number,
+  charTypeId: number,
+): Promise<void> {
+  await api.post(`${BASE}/categories/${categoryId}/characteristics/`, {
+    char_type_id: charTypeId,
+  });
+}
+
+export async function getCategoryCharTypeUsage(
+  categoryId: number,
+  charTypeId: number,
+): Promise<{ count: number }> {
+  const { data } = await api.get<{ count: number }>(
+    `${BASE}/categories/${categoryId}/characteristics/${charTypeId}/usage/`,
+  );
+  return data;
+}
+
+export async function removeCategoryCharType(
+  categoryId: number,
+  charTypeId: number,
+): Promise<void> {
+  await api.delete(`${BASE}/categories/${categoryId}/characteristics/${charTypeId}/`);
+}
+
+export async function listUnassignedProducts(params: {
+  q?: string;
+  page: number;
+  page_size: number;
+}): Promise<Paginated<Product>> {
+  const search = new URLSearchParams();
+  search.append('category__isnull', 'true');
+  if (params.q) search.append('q', params.q);
+  search.append('page', String(params.page));
+  search.append('page_size', String(params.page_size));
+  const { data } = await api.get<Paginated<Product>>(`${BASE}/products/`, {
+    params: search,
+  });
+  return data;
+}
+
+export async function assignProducts(
+  categoryId: number,
+  productIds: number[],
+): Promise<{ assigned: number }> {
+  const { data } = await api.post<{ assigned: number }>(
+    `${BASE}/categories/${categoryId}/assign-products/`,
+    { product_ids: productIds },
+  );
+  return data;
+}
+
+const CAT_IMPORT_BASE = '/products/categories';
+
+export async function previewCategoryImport(body: CategoryImportRequestBody): Promise<ImportJob> {
+  const { data } = await api.post<ImportJob>(`${CAT_IMPORT_BASE}/import/preview/`, body);
+  return data;
+}
+
+export async function commitCategoryImport(body: CategoryImportRequestBody): Promise<ImportJob> {
+  const { data } = await api.post<ImportJob>(`${CAT_IMPORT_BASE}/import/commit/`, body);
+  return data;
+}
+
+export async function getCategoryImportJob(jobId: string): Promise<ImportJob> {
+  const { data } = await api.get<ImportJob>(`${CAT_IMPORT_BASE}/import/jobs/${jobId}/`);
   return data;
 }

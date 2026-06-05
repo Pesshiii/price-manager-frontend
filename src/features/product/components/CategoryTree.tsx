@@ -1,5 +1,6 @@
 import { ActionIcon, Group, Stack, Text } from '@mantine/core';
 import { IconPlus, IconTrash } from '@tabler/icons-react';
+import { Link } from 'react-router-dom';
 import type { Category } from '../types';
 
 interface CategoryNode extends Category {
@@ -63,7 +64,7 @@ function CategoryNodeRow({ node, depth, onAddChild, onDelete, deletingId }: RowP
   return (
     <Stack gap={2} pl={depth * 16}>
       <Group justify="space-between" wrap="nowrap">
-        <Text>{node.name}</Text>
+        <Text component={Link} to={`/products/categories/${node.id}`}>{node.name}</Text>
         <Group gap={4} wrap="nowrap">
           <ActionIcon
             variant="subtle"

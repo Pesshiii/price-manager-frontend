@@ -2,6 +2,7 @@ import { Button, Card, Group, Loader, Modal, Stack, TextInput, Title } from '@ma
 import { useDisclosure } from '@mantine/hooks';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { createCategory, deleteCategory } from '../api';
 import { CategoryTree } from '../components/CategoryTree';
 import { useCategories } from '../hooks/useCategories';
@@ -31,7 +32,12 @@ export function CategoriesPage() {
 
   return (
     <Stack>
-      <Title order={2}>Категории</Title>
+      <Group justify="space-between">
+        <Title order={2}>Категории</Title>
+        <Button component={Link} to="/products/categories/import" variant="default">
+          Импортировать
+        </Button>
+      </Group>
       {isLoading && <Loader />}
       {!isLoading && (
         <Card withBorder padding="md">

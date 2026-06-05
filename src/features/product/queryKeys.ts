@@ -37,3 +37,7 @@ export const charMutationJobKeys = {
   detail: (id: string | null) =>
     [...charMutationJobKeys.all, 'detail', id] as const,
 };
+
+export const categoryImportJobKeys = {
+  detail: (id: string | null) => ['product', 'category-import-jobs', id] as const,
+};

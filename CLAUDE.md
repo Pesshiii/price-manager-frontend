@@ -110,6 +110,7 @@ Vitest + jsdom + Testing Library + MSW. `src/test/setup.ts` polyfills `matchMedi
 
 - Mantine 7 sub-package styles are imported in `main.tsx` (`@mantine/core`, `@mantine/notifications`, `@mantine/dropzone`). Adding a new Mantine sub-package requires importing its CSS there too.
 - UI strings are in Russian (see route placeholders in `src/routes.tsx`).
+- Every time new page or feature is added **ALWAYS** update the `FRONTEND_MAP.md` file
 
 ## Agent skills
 

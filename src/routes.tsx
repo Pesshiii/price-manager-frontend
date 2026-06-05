@@ -12,6 +12,8 @@ import { CategoriesPage } from '@/features/product/pages/CategoriesPage';
 import { BrandsPage } from '@/features/product/pages/BrandsPage';
 import { CharacteristicTypesPage } from '@/features/product/pages/CharacteristicTypesPage';
 import { ImportPage } from '@/features/product/pages/ImportPage';
+import { CategoryImportPage } from '@/features/product/pages/CategoryImportPage';
+import { CategoryDetailPage } from '@/features/product/pages/CategoryDetailPage';
 import { SuppliersPage } from '@/features/supplier/pages/SuppliersPage';
 import { SupplierDetailPage } from '@/features/supplier/pages/SupplierDetailPage';
 import { FeedMappingCreatePage } from '@/features/supplier/pages/FeedMappingCreatePage';
@@ -42,6 +44,8 @@ export const router = createBrowserRouter([
       { path: 'products/new', element: <ProductEditorPage /> },
       { path: 'products/import', element: <ImportPage /> },
       { path: 'products/categories', element: <CategoriesPage /> },
+      { path: 'products/categories/import', element: <CategoryImportPage /> },
+      { path: 'products/categories/:id', element: <CategoryDetailPage /> },
       { path: 'products/brands', element: <BrandsPage /> },
       { path: 'products/characteristics', element: <CharacteristicTypesPage /> },
       { path: 'products/:id', element: <ProductDetailPage /> },
