@@ -26,6 +26,8 @@ import {
 } from '../api';
 import { supplierKeys } from '../queryKeys';
 import type { SupplierFeedStatus, UploadedFile } from '../types';
+import { listSnapshots } from '@/features/transform/api';
+import { transformKeys } from '@/features/transform/queryKeys';
 
 const TERMINAL: SupplierFeedStatus[] = ['matched', 'partial', 'done', 'error'];
 
@@ -68,6 +70,18 @@ export function SupplierFeedPage({ pollInterval = 2000 }: Props) {
     queryFn: () => getFeedMapping(feedQuery.data!.feed_mapping),
     enabled: !!feedQuery.data,
   });
+
+  const snapshotQuery = useQuery({
+    queryKey: transformKeys.snapshotsBySupplier(supplierId),
+    // backend only supports ?supplier filtering — N counts all snapshots for the
+    // supplier, not just this feed
+    queryFn: () => listSnapshots({ supplier: supplierId }),
+    enabled:
+      feedQuery.data?.status === 'matched' ||
+      feedQuery.data?.status === 'partial' ||
+      feedQuery.data?.status === 'done',
+  });
+  const snapshots = snapshotQuery.data ?? [];
 
   const uploadMutation = useMutation({
     mutationFn: (file: File) => uploadFile(fId, file),
@@ -188,17 +202,22 @@ export function SupplierFeedPage({ pollInterval = 2000 }: Props) {
       {isTerminal && feed && (
         <Stack gap="sm">
           {(feed.status === 'matched' || feed.status === 'partial' || feed.status === 'done') && (
-            <Group>
+            <>
+              <Group>
+                <Text>
+                  Всего: <strong>{feed.total}</strong>
+                </Text>
+                <Text>
+                  Сопоставлено: <strong>{feed.matched}</strong>
+                </Text>
+                <Text>
+                  Пропущено: <strong>{feed.skipped}</strong>
+                </Text>
+              </Group>
               <Text>
-                Всего: <strong>{feed.total}</strong>
+                Трансформировано: <strong>{snapshots.length}</strong> снимков
               </Text>
-              <Text>
-                Сопоставлено: <strong>{feed.matched}</strong>
-              </Text>
-              <Text>
-                Пропущено: <strong>{feed.skipped}</strong>
-              </Text>
-            </Group>
+            </>
           )}
 
           {feed.status === 'matched' && (

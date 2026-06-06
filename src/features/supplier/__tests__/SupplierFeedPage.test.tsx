@@ -8,6 +8,11 @@ import { server } from '@/test/msw';
 import { SupplierFeedPage } from '../pages/SupplierFeedPage';
 
 const SUPPLIER = { id: 1, name: 'ТестПоставщик' };
+const SNAPSHOTS = [
+  { id: 10, product: 100, source_feed: 5, captured_at: '2026-06-01T10:00:00Z', data: {} },
+  { id: 11, product: 101, source_feed: 5, captured_at: '2026-06-01T10:01:00Z', data: {} },
+  { id: 12, product: 102, source_feed: 5, captured_at: '2026-06-01T10:02:00Z', data: {} },
+];
 const MAPPING = {
   id: 2,
   supplier: 1,
@@ -36,6 +41,8 @@ function makeFeed(overrides = {}) {
     ...overrides,
   };
 }
+
+const snapshotHandlerEmpty = http.get('/api/transform/snapshots/', () => HttpResponse.json([]));
 
 function baseHandlers(feedOverride = makeFeed()) {
   return [
@@ -221,6 +228,7 @@ describe('SupplierFeedPage', () => {
     server.use(
       http.get('/api/suppliers/1/', () => HttpResponse.json(SUPPLIER)),
       http.get('/api/supplier-feed/mappings/2/', () => HttpResponse.json(MAPPING)),
+      snapshotHandlerEmpty,
       http.get('/api/supplier-feed/feeds/5/', () => {
         callCount++;
         if (callCount <= 1) {
@@ -258,6 +266,7 @@ describe('SupplierFeedPage', () => {
     server.use(
       http.get('/api/suppliers/1/', () => HttpResponse.json(SUPPLIER)),
       http.get('/api/supplier-feed/mappings/2/', () => HttpResponse.json(MAPPING)),
+      snapshotHandlerEmpty,
       http.get('/api/supplier-feed/feeds/5/', () => {
         callCount++;
         if (callCount <= 1) {
@@ -299,6 +308,42 @@ describe('SupplierFeedPage', () => {
 
     expect(await screen.findByText('Пайплайн завершился с ошибкой')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /удалить выгрузку/i })).toBeInTheDocument();
+  });
+
+  it('done feed: Трансформировано stat shows snapshot count', async () => {
+    server.use(
+      ...baseHandlers(makeFeed({ status: 'done', total: 10, matched: 10, skipped: 0 })),
+      http.get('/api/transform/snapshots/', () => HttpResponse.json(SNAPSHOTS)),
+    );
+
+    renderPage();
+
+    // getByText only joins direct text nodes (skips <strong> children), so use
+    // element.textContent directly to match the full "Трансформировано: 3 снимков".
+    // The predicate also checks the count so findByText retries until the snapshot
+    // query resolves and the count updates from 0 → 3.
+    const stat = await screen.findByText(
+      (_, el) =>
+        el?.tagName === 'P' &&
+        /трансформировано/i.test(el.textContent ?? '') &&
+        (el.textContent ?? '').includes('3'),
+    );
+    expect(stat).toBeInTheDocument();
+  });
+
+  it('done feed: Трансформировано shows 0 when no snapshots', async () => {
+    server.use(
+      ...baseHandlers(makeFeed({ status: 'done', total: 0, matched: 0, skipped: 0 })),
+      snapshotHandlerEmpty,
+    );
+
+    renderPage();
+
+    const stat = await screen.findByText(
+      (_, el) => el?.tagName === 'P' && /трансформировано/i.test(el.textContent ?? ''),
+    );
+    expect(stat.textContent).toContain('0');
+    expect(stat.textContent).toContain('снимков');
   });
 
   it('clicking Удалить выгрузку calls DELETE /feeds/:id/ and navigates to supplier page', async () => {

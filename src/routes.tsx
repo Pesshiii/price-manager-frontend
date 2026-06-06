@@ -21,6 +21,8 @@ import { FeedMappingEditPage } from '@/features/supplier/pages/FeedMappingEditPa
 import { SupplierFeedPage } from '@/features/supplier/pages/SupplierFeedPage';
 import { FeedQueuePage } from '@/features/supplier/pages/FeedQueuePage';
 import { SupplierLinksPage } from '@/features/supplier/pages/SupplierLinksPage';
+import { SnapshotFieldsPage } from '@/features/transform/pages/SnapshotFieldsPage';
+import { TransformRulesPage } from '@/features/transform/pages/TransformRulesPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -40,6 +42,8 @@ export const router = createBrowserRouter([
       { path: 'suppliers/:id/feeds/:feedId', element: <SupplierFeedPage /> },
       { path: 'suppliers/:id/feeds/:feedId/queue', element: <FeedQueuePage /> },
       { path: 'suppliers/:id/links', element: <SupplierLinksPage /> },
+      { path: 'suppliers/:id/mappings/:mappingId/rules', element: <TransformRulesPage /> },
+      { path: 'transform/snapshot-fields', element: <SnapshotFieldsPage /> },
       { path: 'products', element: <ProductListPage /> },
       { path: 'products/new', element: <ProductEditorPage /> },
       { path: 'products/import', element: <ImportPage /> },

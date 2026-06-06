@@ -2,27 +2,35 @@ import {
   Badge,
   Button,
   Card,
+  Collapse,
   Group,
   Loader,
   Stack,
   Table,
   Text,
   Title,
+  UnstyledButton,
 } from '@mantine/core';
 import { IconArrowLeft, IconEdit, IconTrash } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { deleteProduct, getProduct } from '../api';
 import { useBrands } from '../hooks/useBrands';
 import { useCategories } from '../hooks/useCategories';
 import { useCharacteristicTypes } from '../hooks/useCharacteristicTypes';
 import { productKeys } from '../queryKeys';
+import { listSnapshots } from '@/features/transform/api';
+import { transformKeys } from '@/features/transform/queryKeys';
+import { listSuppliers } from '@/features/supplier/api';
+import { supplierKeys } from '@/features/supplier/queryKeys';
 
 export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const productId = Number(id);
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const [snapshotsOpen, setSnapshotsOpen] = useState(false);
 
   const { data: product, isLoading } = useQuery({
     queryKey: productKeys.detail(productId),
@@ -32,6 +40,17 @@ export function ProductDetailPage() {
 
   const { data: categories } = useCategories();
   const { data: brands } = useBrands();
+
+  const { data: snapshots = [] } = useQuery({
+    queryKey: transformKeys.snapshots(productId),
+    queryFn: () => listSnapshots({ product: productId }),
+    enabled: Number.isFinite(productId),
+  });
+
+  const { data: suppliers = [] } = useQuery({
+    queryKey: supplierKeys.all,
+    queryFn: listSuppliers,
+  });
   // Only fetch types that this product actually has values for — bounded by
   // the product's `characteristics` keys (a handful, not the whole catalog).
   const boundNames = product ? Object.keys(product.characteristics ?? {}) : [];
@@ -54,6 +73,11 @@ export function ProductDetailPage() {
   const categoryName = categories?.find((c) => c.id === product.category)?.name ?? '—';
   const brandName = brands?.find((b) => b.id === product.brand)?.name ?? '—';
   const charTypeMap = new Map((charTypes ?? []).map((t) => [t.name, t]));
+
+  const supplierMap = new Map(suppliers.map((s) => [s.id, s.name]));
+  const snapshotSlugs = Array.from(
+    new Set(snapshots.flatMap((s) => Object.keys(s.data))),
+  );
 
   return (
     <Stack>
@@ -132,6 +156,41 @@ export function ProductDetailPage() {
               })}
             </Table.Tbody>
           </Table>
+        </Card>
+      )}
+
+      {snapshots.length > 0 && (
+        <Card withBorder padding="md">
+          <UnstyledButton
+            fw={600}
+            onClick={() => setSnapshotsOpen((o) => !o)}
+          >
+            Снимки поставщиков
+          </UnstyledButton>
+          <Collapse in={snapshotsOpen}>
+            <Table mt="sm">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Поставщик</Table.Th>
+                  {snapshotSlugs.map((slug) => (
+                    <Table.Th key={slug}>{slug}</Table.Th>
+                  ))}
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {snapshots.map((snap) => (
+                  <Table.Tr key={snap.id}>
+                    <Table.Td>{supplierMap.get(snap.supplier) ?? snap.supplier}</Table.Td>
+                    {snapshotSlugs.map((slug) => (
+                      <Table.Td key={slug}>
+                        {snap.data[slug] !== undefined ? String(snap.data[slug]) : '—'}
+                      </Table.Td>
+                    ))}
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Collapse>
         </Card>
       )}
     </Stack>

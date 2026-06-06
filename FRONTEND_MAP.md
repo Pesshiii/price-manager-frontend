@@ -302,6 +302,7 @@ interface ImportMapping {
 | List pipelines | `GET /dataframe/pipelines/` |
 | Create pipeline (inline) | `POST /dataframe/pipelines/` |
 | Update mapping | `PATCH /supplier-feed/mappings/{id}/` |
+| Load rule count (card) | `GET /transform/rules/?feed_mapping={id}` |
 
 - Single-page form (no stepper).
 - Pipeline change triggers a confirmation modal.

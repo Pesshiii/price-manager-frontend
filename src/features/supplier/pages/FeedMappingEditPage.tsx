@@ -23,6 +23,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { listPipelines } from '@/features/dataframe/api';
 import { dataframeKeys } from '@/features/dataframe/queryKeys';
 import type { DataframePayload } from '@/features/dataframe/types';
+import { listRules } from '@/features/transform/api';
+import { transformKeys } from '@/features/transform/queryKeys';
 import { NewPipelineDrawer } from '../components/NewPipelineDrawer';
 import { getFeedMapping, updateFeedMapping } from '../api';
 import { supplierKeys } from '../queryKeys';
@@ -57,6 +59,11 @@ export function FeedMappingEditPage() {
   const pipelinesQuery = useQuery({
     queryKey: dataframeKeys.pipelines(),
     queryFn: listPipelines,
+  });
+
+  const rulesQuery = useQuery({
+    queryKey: transformKeys.rules(feedMappingId),
+    queryFn: () => listRules(feedMappingId),
   });
 
   useEffect(() => {
@@ -209,6 +216,15 @@ export function FeedMappingEditPage() {
           step={0.01}
           decimalScale={2}
         />
+
+        <Card withBorder padding="sm">
+          <Anchor
+            component={Link}
+            to={`/suppliers/${supplierId}/mappings/${feedMappingId}/rules`}
+          >
+            Правила трансформации ({rulesQuery.data?.length ?? '...'}) →
+          </Anchor>
+        </Card>
 
         <Group justify="space-between" mt="md">
           <Button variant="default" onClick={() => navigate(`/suppliers/${supplierId}`)}>
