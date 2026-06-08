@@ -5,7 +5,7 @@ import type { ImportCommitResult, ImportMapping, ImportPreviewResult } from './t
 export type SourceMode = 'saved' | 'adhoc';
 
 export interface ImportPersistedState {
-  version: 2;
+  version: 3;
   mode: SourceMode;
   step: 0 | 1 | 2;
   sessionId: string | null;
@@ -22,11 +22,11 @@ export interface ImportPersistedState {
   commitResult: ImportCommitResult | null;
 }
 
-export const STORAGE_KEY = 'product-import-state-v2';
+export const STORAGE_KEY = 'product-import-state-v3';
 
 export function defaultPersistedState(): ImportPersistedState {
   return {
-    version: 2,
+    version: 3,
     mode: 'saved',
     step: 0,
     sessionId: null,
@@ -49,7 +49,7 @@ export function loadPersistedState(): ImportPersistedState | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<ImportPersistedState>;
-    if (parsed?.version !== 2) {
+    if (parsed?.version !== 3) {
       localStorage.removeItem(STORAGE_KEY);
       return null;
     }

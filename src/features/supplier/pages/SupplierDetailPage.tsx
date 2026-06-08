@@ -12,16 +12,65 @@ import {
   Table,
   Text,
   Title,
+  UnstyledButton,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { IconEdit, IconPlus, IconTrash } from '@tabler/icons-react';
+import { IconChevronDown, IconChevronUp, IconEdit, IconPlus, IconSelector, IconTrash } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { createFeed, deleteFeedMapping, getSupplier, listFeedMappings, listFeeds } from '../api';
 import { supplierKeys } from '../queryKeys';
-import type { SupplierFeedStatus } from '../types';
+import type { FeedMapping, SupplierFeedStatus } from '../types';
+
+type MappingSortField = 'name' | 'pipeline' | 'sku_column' | 'threshold';
+type SortDir = 'asc' | 'desc';
+
+function sortMappings(
+  mappings: FeedMapping[],
+  field: MappingSortField,
+  dir: SortDir,
+): FeedMapping[] {
+  return [...mappings].sort((a, b) => {
+    let cmp = 0;
+    if (field === 'name') cmp = a.name.localeCompare(b.name);
+    else if (field === 'pipeline')
+      cmp = a.dataframe_detail.name.localeCompare(b.dataframe_detail.name);
+    else if (field === 'sku_column')
+      cmp = a.supplier_sku_column.localeCompare(b.supplier_sku_column);
+    else if (field === 'threshold') cmp = a.auto_match_threshold - b.auto_match_threshold;
+    return dir === 'asc' ? cmp : -cmp;
+  });
+}
+
+function SortTh({
+  children,
+  field,
+  active,
+  dir,
+  onSort,
+}: {
+  children: React.ReactNode;
+  field: MappingSortField;
+  active: MappingSortField;
+  dir: SortDir;
+  onSort: (f: MappingSortField) => void;
+}) {
+  const isActive = active === field;
+  const Icon = isActive ? (dir === 'asc' ? IconChevronUp : IconChevronDown) : IconSelector;
+  return (
+    <Table.Th>
+      <UnstyledButton
+        onClick={() => onSort(field)}
+        style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 500 }}
+      >
+        {children}
+        <Icon size={14} style={{ opacity: isActive ? 1 : 0.4 }} />
+      </UnstyledButton>
+    </Table.Th>
+  );
+}
 
 const STATUS_COLOR: Record<SupplierFeedStatus, string> = {
   draft: 'gray',
@@ -44,6 +93,13 @@ export function SupplierDetailPage() {
 
   const [modalOpen, { open: openModal, close: closeModal }] = useDisclosure(false);
   const [selectedMapping, setSelectedMapping] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<MappingSortField>('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  function handleSort(field: MappingSortField) {
+    if (field === sortField) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortField(field); setSortDir('asc'); }
+  }
 
   const supplierQuery = useQuery({
     queryKey: supplierKeys.supplier(supplierId),
@@ -139,15 +195,23 @@ export function SupplierDetailPage() {
               <Table>
                 <Table.Thead>
                   <Table.Tr>
-                    <Table.Th>Название</Table.Th>
-                    <Table.Th>Пайплайн</Table.Th>
-                    <Table.Th>SKU-колонка</Table.Th>
-                    <Table.Th>Порог</Table.Th>
+                    <SortTh field="name" active={sortField} dir={sortDir} onSort={handleSort}>
+                      Название
+                    </SortTh>
+                    <SortTh field="pipeline" active={sortField} dir={sortDir} onSort={handleSort}>
+                      Пайплайн
+                    </SortTh>
+                    <SortTh field="sku_column" active={sortField} dir={sortDir} onSort={handleSort}>
+                      SKU-колонка
+                    </SortTh>
+                    <SortTh field="threshold" active={sortField} dir={sortDir} onSort={handleSort}>
+                      Порог
+                    </SortTh>
                     <Table.Th />
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {mappingsQuery.data!.map((m) => (
+                  {sortMappings(mappingsQuery.data!, sortField, sortDir).map((m) => (
                     <Table.Tr key={m.id}>
                       <Table.Td fw={500}>{m.name}</Table.Td>
                       <Table.Td>

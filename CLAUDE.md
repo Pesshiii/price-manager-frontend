@@ -69,7 +69,7 @@ The wizard at `ImportPage.tsx` has **two** steps + a results pane:
    interface ImportMapping {
      sku?: FieldMapping;
      name?: FieldMapping;
-     category?: FieldMapping;
+     category?: CategoryFieldMapping; // { column, path_separator? } — path_separator enables get_or_create chain
      brand?: FieldMapping;
      description?: FieldMapping;
      status?: FieldMapping;

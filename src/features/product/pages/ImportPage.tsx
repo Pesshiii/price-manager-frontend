@@ -156,7 +156,7 @@ export function ImportPage() {
   });
 
   useImportPersistence({
-    version: 2,
+    version: 3,
     mode,
     step: (step === 1 || step === 2 ? step : 0) as 0 | 1 | 2,
     sessionId,

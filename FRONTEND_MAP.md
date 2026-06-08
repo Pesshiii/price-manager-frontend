@@ -302,10 +302,18 @@ interface ImportMapping {
 | List pipelines | `GET /dataframe/pipelines/` |
 | Create pipeline (inline) | `POST /dataframe/pipelines/` |
 | Update mapping | `PATCH /supplier-feed/mappings/{id}/` |
+| List markup sets | `GET /supplier-feed/markup-sets/?mapping={id}` |
+| Create markup set | `POST /supplier-feed/markup-sets/` |
+| Update markup set | `PATCH /supplier-feed/markup-sets/{id}/` |
+| Delete markup set | `DELETE /supplier-feed/markup-sets/{id}/` |
+| Create markup rule | `POST /supplier-feed/markup-rules/` |
+| Update markup rule | `PATCH /supplier-feed/markup-rules/{id}/` |
+| Delete markup rule | `DELETE /supplier-feed/markup-rules/{id}/` |
 
 - Single-page form (no stepper).
 - Pipeline change triggers a confirmation modal.
 - "Правила трансформации (N) →" link card navigates to the rules page.
+- **Наценки (MarkupSets):** section below the main form. Lists `FeedMarkupSet` cards (name, `price_column → output_column`, rule count). Add/edit opens `MarkupSetModal`; delete immediately via `DELETE`. Modal: set fields + rule table with ↑/↓ reorder; saved as a batch (set `PATCH` + per-rule `POST/PATCH/DELETE`). `price_column` / `output_column` are `Autocomplete` from `variable_columns`. Rule order = row position × 10. Section only appears in edit mode (markup sets require an existing mapping FK).
 
 ### Transform Rules — `/suppliers/:id/mappings/:mappingId/rules`
 **File:** `src/features/transform/pages/TransformRulesPage.tsx`
@@ -512,6 +520,17 @@ POST   /supplier-feed/feeds/{feedId}/process/
 
 GET    /supplier-feed/feeds/{feedId}/queue/                            # paginated, 20/page
 POST   /supplier-feed/feeds/{feedId}/queue/{entryId}/resolve/         # {product_id} or {skipped:true}
+
+GET    /supplier-feed/markup-sets/          # ?mapping={id}
+GET    /supplier-feed/markup-sets/{id}/
+POST   /supplier-feed/markup-sets/
+PATCH  /supplier-feed/markup-sets/{id}/
+DELETE /supplier-feed/markup-sets/{id}/
+
+GET    /supplier-feed/markup-rules/         # ?markup_set={id}
+POST   /supplier-feed/markup-rules/
+PATCH  /supplier-feed/markup-rules/{id}/
+DELETE /supplier-feed/markup-rules/{id}/
 ```
 
 ---
@@ -549,6 +568,7 @@ POST   /supplier-feed/feeds/{feedId}/queue/{entryId}/resolve/         # {product
 | `supplierKeys.feeds(supplierId)` | feed create/delete |
 | `supplierKeys.feed(feedId)` | file upload/delete, process, polling |
 | `supplierKeys.queue(feedId, page)` | resolve/create/ignore per entry |
+| `supplierKeys.markupSets(mappingId)` | markup set create/update/delete, rule batch save |
 | `transformKeys.snapshotFields()` | field create/update/delete |
 | `transformKeys.snapshotField(id)` | field update |
 | `transformKeys.rules(mappingId)` | rule create/update/delete |

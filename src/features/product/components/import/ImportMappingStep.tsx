@@ -151,13 +151,12 @@ export function ImportMappingStep({
       ...mapping,
       category: {
         column,
-        ...(prevCol?.separator !== undefined ? { separator: prevCol.separator } : {}),
-        ...(prevCol?.create_missing !== undefined ? { create_missing: prevCol.create_missing } : {}),
+        ...(prevCol?.path_separator !== undefined ? { path_separator: prevCol.path_separator } : {}),
       },
     });
   };
 
-  const setCategoryOption = (patch: Partial<{ separator: string; create_missing: boolean }>) => {
+  const setCategoryOption = (patch: Partial<{ path_separator: string }>) => {
     const cat = mapping.category;
     if (!cat || !('column' in cat)) return;
     onChange({ ...mapping, category: { ...cat, ...patch } });
@@ -248,37 +247,22 @@ export function ImportMappingStep({
                       searchable
                     />
                     {getCategoryColumn(mapping.category) && (
-                      <Group gap="sm" align="flex-end">
-                        <TextInput
-                          size="xs"
-                          label="Разделитель"
-                          placeholder=">"
-                          value={
-                            mapping.category && 'column' in mapping.category
-                              ? (mapping.category.separator ?? '')
-                              : ''
-                          }
-                          onChange={(e) =>
-                            setCategoryOption({
-                              separator: e.currentTarget.value || undefined,
-                            })
-                          }
-                          style={{ width: 120 }}
-                        />
-                        <Switch
-                          size="sm"
-                          label="Создавать отсутствующие"
-                          checked={
-                            mapping.category && 'column' in mapping.category
-                              ? (mapping.category.create_missing ?? false)
-                              : false
-                          }
-                          onChange={(e) =>
-                            setCategoryOption({ create_missing: e.currentTarget.checked })
-                          }
-                          mb={4}
-                        />
-                      </Group>
+                      <TextInput
+                        size="xs"
+                        label="Разделитель"
+                        placeholder=">"
+                        value={
+                          mapping.category && 'column' in mapping.category
+                            ? (mapping.category.path_separator ?? '')
+                            : ''
+                        }
+                        onChange={(e) =>
+                          setCategoryOption({
+                            path_separator: e.currentTarget.value || undefined,
+                          })
+                        }
+                        style={{ width: 120 }}
+                      />
                     )}
                   </Stack>
                 ) : (

@@ -4,6 +4,10 @@ import type {
   BulkCreateProductsResult,
   FeedMapping,
   FeedMappingWritePayload,
+  FeedMarkupRule,
+  FeedMarkupRuleWritePayload,
+  FeedMarkupSet,
+  FeedMarkupSetWritePayload,
   ProductSearchResult,
   Supplier,
   SupplierFeed,
@@ -17,6 +21,8 @@ import type {
 const BASE = '/suppliers';
 const MAPPINGS_BASE = '/supplier-feed/mappings';
 const FEEDS_BASE = '/supplier-feed/feeds';
+const MARKUP_SETS_BASE = '/supplier-feed/markup-sets';
+const MARKUP_RULES_BASE = '/supplier-feed/markup-rules';
 
 export async function listSuppliers(): Promise<Supplier[]> {
   const { data } = await api.get<Supplier[]>(`${BASE}/`);
@@ -169,4 +175,45 @@ export async function bulkCreateProducts(
     { name_column: nameColumn },
   );
   return data;
+}
+
+export async function listMarkupSets(mappingId: number): Promise<FeedMarkupSet[]> {
+  const { data } = await api.get<FeedMarkupSet[]>(`${MARKUP_SETS_BASE}/`, {
+    params: { mapping: mappingId },
+  });
+  return data;
+}
+
+export async function createMarkupSet(payload: FeedMarkupSetWritePayload): Promise<FeedMarkupSet> {
+  const { data } = await api.post<FeedMarkupSet>(`${MARKUP_SETS_BASE}/`, payload);
+  return data;
+}
+
+export async function updateMarkupSet(
+  id: number,
+  payload: Partial<FeedMarkupSetWritePayload>,
+): Promise<FeedMarkupSet> {
+  const { data } = await api.patch<FeedMarkupSet>(`${MARKUP_SETS_BASE}/${id}/`, payload);
+  return data;
+}
+
+export async function deleteMarkupSet(id: number): Promise<void> {
+  await api.delete(`${MARKUP_SETS_BASE}/${id}/`);
+}
+
+export async function createMarkupRule(payload: FeedMarkupRuleWritePayload): Promise<FeedMarkupRule> {
+  const { data } = await api.post<FeedMarkupRule>(`${MARKUP_RULES_BASE}/`, payload);
+  return data;
+}
+
+export async function updateMarkupRule(
+  id: number,
+  payload: Partial<Omit<FeedMarkupRuleWritePayload, 'markup_set'>>,
+): Promise<FeedMarkupRule> {
+  const { data } = await api.patch<FeedMarkupRule>(`${MARKUP_RULES_BASE}/${id}/`, payload);
+  return data;
+}
+
+export async function deleteMarkupRule(id: number): Promise<void> {
+  await api.delete(`${MARKUP_RULES_BASE}/${id}/`);
 }

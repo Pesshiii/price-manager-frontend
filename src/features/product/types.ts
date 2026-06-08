@@ -163,7 +163,7 @@ export type FacetsResponse = Record<string, FacetGroupData>;
 export type FieldMapping = { column: string } | { const: unknown };
 
 export type CategoryFieldMapping =
-  | { column: string; separator?: string; create_missing?: boolean }
+  | { column: string; path_separator?: string }
   | { const: unknown };
 
 /**

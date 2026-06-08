@@ -90,3 +90,38 @@ export interface BulkCreateProductsResult {
   failed: number;
   errors: { entry_id: number; reason: string }[];
 }
+
+export interface FeedMarkupRule {
+  id: number;
+  markup_set: number;
+  order: number;
+  price_from: string | null;
+  price_to: string | null;
+  markup: string;
+  increase: string;
+}
+
+export interface FeedMarkupRuleWritePayload {
+  markup_set: number;
+  order: number;
+  price_from: string | null;
+  price_to: string | null;
+  markup: string;
+  increase: string;
+}
+
+export interface FeedMarkupSet {
+  id: number;
+  feed_mapping: number;
+  name: string;
+  price_column: string;
+  output_column: string;
+  rules: FeedMarkupRule[];
+}
+
+export interface FeedMarkupSetWritePayload {
+  feed_mapping: number;
+  name: string;
+  price_column: string;
+  output_column: string;
+}
